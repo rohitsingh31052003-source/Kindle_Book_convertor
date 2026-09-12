@@ -1,18 +1,23 @@
-"""First-pass PDF text extraction (Milestone 1.3).
+"""First-pass PDF text extraction (Milestone 1.3, extended in M2.1).
 
 This module converts a *text-based* PDF into the format-independent
 :mod:`kindle_converter.document` book model. It is a deliberately simple
 first extraction layer:
 
-* It extracts readable text with PyMuPDF, preserving reading order as
-  reliably as PyMuPDF's "dict" layout provides it.
-* It applies only conservative, deterministic normalization.
+* It consumes the layout-aware :mod:`kindle_converter.pdf.layout`
+  representation -- the single PDF extraction boundary -- and reads its
+  per-page blocks instead of calling PyMuPDF directly. Geometry and
+  per-span metadata therefore stay available to later reconstruction
+  stages without changing this module's behavior.
+* It applies only conservative, deterministic normalization and
+  paragraphization (see :func:`_same_paragraph`).
 * It performs **no** semantic reconstruction (no chapter detection, no
   heading detection, no header/footer stripping) -- that is a later
   structural stage.
 
-Pipeline: PDF -> :func:`analyze_pdf` (the analyzer) -> text extraction
--> :class:`kindle_converter.document.models.Book`.
+Pipeline: PDF -> :func:`analyze_pdf` (the analyzer) -> layout extraction
+(:mod:`kindle_converter.pdf.layout`) -> paragraphized text extraction ->
+:class:`kindle_converter.document.models.Book`.
 
 The extractor knows nothing about EPUB/AZW3 generation: the document
 model is the only bridge to the output side.
@@ -39,6 +44,7 @@ from .analyzer import (
     PDFReadError,
     analyze_pdf,
 )
+from .layout import LayoutPage, extract_page_layout
 from .models import PDFType
 
 PathLike = str | os.PathLike[str]
@@ -231,24 +237,28 @@ def _build_metadata(doc: pymupdf.Document) -> BookMetadata:
 def _extract_pages(doc: pymupdf.Document) -> list[list[Paragraph]]:
     """Return one list of :class:`Paragraph` blocks per PDF page.
 
-    Pages that carry only repeated non-body noise (headers, footers, page
-    numbers) may produce an empty list; the surrounding ``PageBreak``
-    markers are still emitted by the caller so page boundaries survive.
+    The layout-aware representation (:func:`extract_page_layout`) is the
+    single extraction boundary the extractor consumes; the raw lines for
+    paragraphization are derived from its per-page blocks. Pages that carry
+    only repeated non-body noise (headers, footers, page numbers) may
+    produce an empty list; the surrounding ``PageBreak`` markers are still
+    emitted by the caller so page boundaries survive.
     """
+    layout = extract_page_layout(doc)
     pages: list[list[Paragraph]] = []
-    for index in range(doc.page_count):
-        page = doc.load_page(index)
+    for layout_page in layout.pages:
         try:
-            lines = _extract_lines(page)
+            lines = _extract_lines(layout_page)
         except Exception as exc:
             raise PDFReadError(
-                f"Failed to extract text from page {index + 1} of the PDF"
+                f"Failed to extract text from page "
+                f"{layout_page.page_number} of the PDF"
             ) from exc
         pages.append(lines)
     return pages
 
 
-def _extract_lines(page: pymupdf.Page) -> list[Paragraph]:
+def _extract_lines(layout_page: LayoutPage) -> list[Paragraph]:
     """Extract, normalize, and paragraphize the text of one page.
 
     The raw lines (see :func:`_raw_lines`) are grouped into paragraphs with
@@ -265,7 +275,7 @@ def _extract_lines(page: pymupdf.Page) -> list[Paragraph]:
     space, which also normalizes the accidental missing-space artifacts that
     ``"dict"`` mode produces at line breaks.
     """
-    raw = _raw_lines(page)
+    raw = _raw_lines(layout_page)
     if not raw:
         return []
 
@@ -312,24 +322,22 @@ class RawLine:
         self.y1 = y1
 
 
-def _raw_lines(page: pymupdf.Page) -> list[RawLine]:
-    """Return the visible text lines of ``page`` in PyMuPDF's "dict" order.
+def _raw_lines(layout_page: LayoutPage) -> list[RawLine]:
+    """Return the visible text lines of one page in "dict" extraction order.
 
-    Lines are collected from the PyMuPDF ``"dict"`` layout, which groups
-    text spans into physical lines and orders blocks in the PDF content
-    stream. We deliberately do **not** re-sort these lines (for example by
-    ``(y, x)`` position): that kind of layout reconstruction -- including
-    multi-column handling -- belongs to a later milestone, and a naive
-    global sort would interleave columns line by line. Reading order is
-    therefore only as reliable as the order PyMuPDF's "dict" mode provides.
+    The lines come from the page's layout-aware :class:`LayoutPage`, whose
+    blocks preserve PyMuPDF's ``"dict"`` stream order. We deliberately do
+    **not** re-sort these lines (for example by ``(y, x)`` position): that
+    kind of layout reconstruction -- including multi-column handling --
+    belongs to a later milestone, and a naive global sort would interleave
+    columns line by line. Reading order is therefore only as reliable as
+    the order PyMuPDF's "dict" mode provides.
     """
     lines_out: list[RawLine] = []
-    for block in page.get_text("dict")["blocks"]:
-        if block.get("type") != 0:  # 0 == text; skip images
-            continue
-        for line in block.get("lines", []):
-            x0, y0, _x1, y1 = line["bbox"]
-            text = _normalize_line(_join_spans(line))
+    for block in layout_page.blocks:
+        for line in block.lines:
+            x0, y0, _x1, y1 = line.bbox
+            text = _normalize_line(line.text)
             if not text:
                 continue
             candidate = RawLine(text, x0=x0, y0=y0, y1=y1)
@@ -341,17 +349,6 @@ def _raw_lines(page: pymupdf.Page) -> list[RawLine]:
                 continue
             lines_out.append(candidate)
     return lines_out
-
-
-def _join_spans(line: dict) -> str:
-    """Join the spans of a PyMuPDF text line.
-
-    The spans are concatenated without inserting separators: PyMuPDF's span
-    bboxes carry the positional gaps, and most text spans preserve the
-    inter-word spaces of the source encoding, so joining verbatim best
-    preserves what the page actually says.
-    """
-    return "".join(span.get("text", "") for span in line.get("spans", []))
 
 
 def _overlaps(upper: RawLine, lower: RawLine) -> bool:
