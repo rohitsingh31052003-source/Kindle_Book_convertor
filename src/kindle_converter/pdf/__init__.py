@@ -9,9 +9,15 @@ The ``layout`` submodule (Milestone 2.1) preserves the layout-aware text
 representation -- per-page blocks with geometry, font metadata, and
 extraction ordering -- that the later reconstruction stages consume.
 
+The ``reading_order`` submodule (Milestone 2.2) consumes that layout
+representation and produces a deterministic, geometry-based reading order
+for the text blocks of each page (``reconstruct_read_order``), leaving the
+original extraction order untouched as provenance.
+
 The ``extractor`` submodule converts a text-based PDF into the
 format-independent :class:`~kindle_converter.document.models.Book` model
-with :func:`extract_book`. OCR and layout reconstruction are planned for
+with :func:`extract_book`. OCR and the remaining layout reconstruction
+(paragraphs, headings, columns, header/footer detection) are planned for
 later milestones.
 """
 
@@ -41,6 +47,16 @@ from .layout import (
     extract_page_layout,
 )
 from .models import PageAnalysis, PDFAnalysis, PDFType
+from .reading_order import (
+    COLUMN_OVERLAP_RATIO,
+    ROW_OVERLAP_TOLERANCE_PT,
+    ROW_TOP_TOLERANCE_PT,
+    OrderedBlock,
+    OrderedLayout,
+    OrderedPage,
+    reconstruct_page_order,
+    reconstruct_read_order,
+)
 
 __all__ = [
     "PDFAnalysis",
@@ -65,4 +81,12 @@ __all__ = [
     "FontFlags",
     "decode_font_flags",
     "extract_page_layout",
+    "COLUMN_OVERLAP_RATIO",
+    "ROW_OVERLAP_TOLERANCE_PT",
+    "ROW_TOP_TOLERANCE_PT",
+    "OrderedBlock",
+    "OrderedPage",
+    "OrderedLayout",
+    "reconstruct_page_order",
+    "reconstruct_read_order",
 ]
