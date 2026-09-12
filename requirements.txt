@@ -1,0 +1,6 @@
+# Runtime dependencies (mirrors [project.dependencies] in pyproject.toml)
+PyMuPDF>=1.24,<2
+ebooklib>=0.19,<1
+
+# Development / test dependencies (mirrors [project.optional-dependencies].dev)
+pytest>=8.0,<9

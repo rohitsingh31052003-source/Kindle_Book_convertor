@@ -6,9 +6,9 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 1 — Foundation
+**Development stage:** Milestone 1.0 — Project Foundation
 
-The project is currently being built from the ground up. The first objective is to establish a clean, testable conversion architecture before adding advanced PDF processing, OCR, Kindle-specific optimization, or a graphical interface.
+The project is currently being built from the ground up. Milestone 1.0 sets up a clean, testable project foundation (packaging, package structure, test harness). PDF processing, EPUB generation, OCR, Kindle-specific optimization, and a graphical interface will be added in later milestones.
 
 ## Goals
 
@@ -185,6 +185,42 @@ Planned core technologies include:
 
 Additional dependencies, particularly OCR-related tools, will be introduced only when they are required by the corresponding milestone.
 
+## Development
+
+### Requirements
+
+* Python 3.12 or newer
+
+### Setup
+
+Create a virtual environment and install the package in editable mode with
+its development extra:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+```
+
+### Running the tests
+
+pytest is configured (via `pythonpath = ["src"]` in `pyproject.toml`) to find the
+`src/`-layout package, so tests can be run **without** installing the package:
+
+```bash
+pytest
+```
+
+For full development setup (including the runtime dependencies), use the
+editable install described above.
+
+### Building the package
+
+```bash
+pip install build
+python -m build
+```
+
 ## Development Principles
 
 ### 1. Build the conversion engine first
@@ -235,15 +271,15 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 
 ## Development Roadmap
 
-### Milestone 1 — Foundation
+### Milestone 1.0 — Project Foundation *(current)*
 
-* [ ] Initialize Python project
-* [ ] Establish package structure
+* [x] Initialize Python project
+* [x] Establish package structure
+* [x] Add automated tests
 * [ ] Create document domain model
 * [ ] Implement PDF type analysis
 * [ ] Implement basic text extraction
 * [ ] Implement initial EPUB generation
-* [ ] Add automated tests
 * [ ] Create an end-to-end PDF → EPUB pipeline
 
 ### Milestone 2 — Book Reconstruction

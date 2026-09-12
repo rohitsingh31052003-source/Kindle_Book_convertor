@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kindle-converter"
+version = "0.1.0"
+description = "Convert PDFs into high-quality, reflowable ebooks (EPUB/AZW3) suitable for Kindle."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [
+    { name = "rohitsingh31052003-source" },
+]
+keywords = ["pdf", "epub", "azw3", "kindle", "ebook", "converter"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing",
+]
+dependencies = [
+    "PyMuPDF>=1.24,<2",
+    "ebooklib>=0.19,<1",
+]
+
+[project.urls]
+Repository = "https://github.com/rohitsingh31052003-source/Kindle_Book_convertor"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# Make src-layout package importable when running pytest without installing.
+pythonpath = ["src"]
