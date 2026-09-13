@@ -14,11 +14,17 @@ representation and produces a deterministic, geometry-based reading order
 for the text blocks of each page (``reconstruct_read_order``), leaving the
 original extraction order untouched as provenance.
 
+The ``paragraphs`` submodule (Milestone 2.3) consumes the M2.2 reading
+order and groups physical text lines into logical paragraphs
+(``reconstruct_paragraphs``), preserving source provenance without
+introducing PDF geometry into the document model. The M2.2 reading order
+is authoritative; M2.3 does not re-sort lines.
+
 The ``extractor`` submodule converts a text-based PDF into the
 format-independent :class:`~kindle_converter.document.models.Book` model
 with :func:`extract_book`. OCR and the remaining layout reconstruction
-(paragraphs, headings, columns, header/footer detection) are planned for
-later milestones.
+(headings, columns, header/footer detection) are planned for later
+milestones.
 """
 
 from .analyzer import (
@@ -47,6 +53,16 @@ from .layout import (
     extract_page_layout,
 )
 from .models import PageAnalysis, PDFAnalysis, PDFType
+from .paragraphs import (
+    PARAGRAPH_GAP_FACTOR,
+    PARAGRAPH_INDENT_PT,
+    SHORT_LINE_THRESHOLD,
+    ParagraphLayout,
+    ParagraphPage,
+    ReconstructedParagraph,
+    reconstruct_page_paragraphs,
+    reconstruct_paragraphs,
+)
 from .reading_order import (
     COLUMN_OVERLAP_RATIO,
     ROW_OVERLAP_TOLERANCE_PT,
@@ -89,4 +105,12 @@ __all__ = [
     "OrderedLayout",
     "reconstruct_page_order",
     "reconstruct_read_order",
+    "ParagraphLayout",
+    "ParagraphPage",
+    "ReconstructedParagraph",
+    "reconstruct_page_paragraphs",
+    "reconstruct_paragraphs",
+    "PARAGRAPH_GAP_FACTOR",
+    "PARAGRAPH_INDENT_PT",
+    "SHORT_LINE_THRESHOLD",
 ]
