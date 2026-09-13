@@ -20,11 +20,17 @@ order and groups physical text lines into logical paragraphs
 introducing PDF geometry into the document model. The M2.2 reading order
 is authoritative; M2.3 does not re-sort lines.
 
+The ``headings`` submodule (Milestone 2.4) consumes the M2.3 paragraph
+representation and classifies each paragraph as a likely heading or body
+text using conservative, deterministic typography and geometry evidence
+(``classify_paragraphs`` / ``detect_headings``). It is a classification
+layer, not a text-rewriting layer: paragraphs are never reordered or
+modified, and provenance is preserved.
+
 The ``extractor`` submodule converts a text-based PDF into the
 format-independent :class:`~kindle_converter.document.models.Book` model
 with :func:`extract_book`. OCR and the remaining layout reconstruction
-(headings, columns, header/footer detection) are planned for later
-milestones.
+(columns, header/footer detection) are planned for later milestones.
 """
 
 from .analyzer import (
@@ -41,6 +47,43 @@ from .extractor import (
     MixedPDFError,
     ScannedPDFError,
     extract_book,
+)
+from .headings import (
+    BODY_LIKE_PENALTY,
+    BOLD_TYPOGRAPHY_SCORE,
+    CENTERED_ALIGNMENT_SCORE,
+    CENTERED_ALIGNMENT_TOLERANCE_PT,
+    CENTERED_WIDTH_FRACTION,
+    ClassifiedParagraph,
+    DetectedHeading,
+    FONT_FAMILY_CHANGE_SCORE,
+    FONT_SIZE_ABOVE_BASELINE_SCORE,
+    FONT_SIZE_RATIO_THRESHOLD,
+    HeadingLayout,
+    HeadingPage,
+    HEADING_SCORE_THRESHOLD,
+    ISOLATED_PARAGRAPH_SCORE,
+    ITALIC_TYPOGRAPHY_SCORE,
+    LARGE_SPACING_AFTER_SCORE,
+    LARGE_SPACING_BEFORE_SCORE,
+    LARGE_SPACING_GAP_FACTOR,
+    LARGE_SPACING_LINE_FACTOR,
+    LARGE_SPACING_MIN_PT,
+    LONG_PARAGRAPH_CHARS,
+    LONG_PARAGRAPH_PENALTY,
+    MIN_HEADING_SIGNALS,
+    MIXED_FONT_SIZE_CONTRAST_SCORE,
+    MULTI_LINE_HEADING_SHAPE_SCORE,
+    PAGE_EDGE_MARGIN_PT,
+    PAGE_EDGE_PROXIMITY_SCORE,
+    SHORT_PARAGRAPH_CHARS,
+    SHORT_PARAGRAPH_SCORE,
+    STRONG_FONT_SIZE_ABOVE_BASELINE_SCORE,
+    STRONG_FONT_SIZE_RATIO_THRESHOLD,
+    UNCONFIRMED_BOLD_TYPOGRAPHY_SCORE,
+    VERY_SHORT_PARAGRAPH_CHARS,
+    classify_paragraphs,
+    detect_headings,
 )
 from .layout import (
     FontFlags,
@@ -113,4 +156,39 @@ __all__ = [
     "PARAGRAPH_GAP_FACTOR",
     "PARAGRAPH_INDENT_PT",
     "SHORT_LINE_THRESHOLD",
+    "ClassifiedParagraph",
+    "DetectedHeading",
+    "HeadingPage",
+    "HeadingLayout",
+    "classify_paragraphs",
+    "detect_headings",
+    "FONT_SIZE_RATIO_THRESHOLD",
+    "STRONG_FONT_SIZE_RATIO_THRESHOLD",
+    "MIN_HEADING_SIGNALS",
+    "HEADING_SCORE_THRESHOLD",
+    "SHORT_PARAGRAPH_CHARS",
+    "VERY_SHORT_PARAGRAPH_CHARS",
+    "LONG_PARAGRAPH_CHARS",
+    "LARGE_SPACING_MIN_PT",
+    "LARGE_SPACING_LINE_FACTOR",
+    "LARGE_SPACING_GAP_FACTOR",
+    "CENTERED_ALIGNMENT_TOLERANCE_PT",
+    "CENTERED_WIDTH_FRACTION",
+    "PAGE_EDGE_MARGIN_PT",
+    "FONT_SIZE_ABOVE_BASELINE_SCORE",
+    "STRONG_FONT_SIZE_ABOVE_BASELINE_SCORE",
+    "MIXED_FONT_SIZE_CONTRAST_SCORE",
+    "BOLD_TYPOGRAPHY_SCORE",
+    "UNCONFIRMED_BOLD_TYPOGRAPHY_SCORE",
+    "ITALIC_TYPOGRAPHY_SCORE",
+    "FONT_FAMILY_CHANGE_SCORE",
+    "CENTERED_ALIGNMENT_SCORE",
+    "LARGE_SPACING_BEFORE_SCORE",
+    "LARGE_SPACING_AFTER_SCORE",
+    "ISOLATED_PARAGRAPH_SCORE",
+    "SHORT_PARAGRAPH_SCORE",
+    "MULTI_LINE_HEADING_SHAPE_SCORE",
+    "PAGE_EDGE_PROXIMITY_SCORE",
+    "LONG_PARAGRAPH_PENALTY",
+    "BODY_LIKE_PENALTY",
 ]

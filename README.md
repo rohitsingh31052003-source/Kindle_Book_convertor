@@ -285,8 +285,8 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 ### Milestone 2 — Book Reconstruction
 
 * [ ] Chapter detection
-* [ ] Heading detection
-* [ ] Paragraph reconstruction
+* [x] Heading detection (M2.4 — layout-based, conservative, deterministic)
+* [x] Paragraph reconstruction (M2.3)
 * [ ] Header/footer removal
 * [ ] Page-number removal
 * [ ] Table of contents generation
