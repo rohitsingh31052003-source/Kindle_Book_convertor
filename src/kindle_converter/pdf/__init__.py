@@ -30,9 +30,12 @@ modified, and provenance is preserved.
 The ``extractor`` submodule converts a text-based PDF into the
 format-independent :class:`~kindle_converter.document.models.Book` model
 with :func:`extract_book`. OCR and the remaining layout reconstruction
-(columns, header/footer detection) are planned for later milestones.
+(columns) are planned for later milestones. Header/footer detection is
+implemented in the ``header_footer`` submodule (Milestone 2.5): a
+conservative, deterministic, detection-only layer that classifies repeated
+page-level headers and footers from the M2.3 paragraph representation
+(``detect_headers_footers`` / ``classify_header_footer_paragraphs``).
 """
-
 from .analyzer import (
     EmptyPDFError,
     NoContentError,
@@ -116,6 +119,29 @@ from .reading_order import (
     reconstruct_page_order,
     reconstruct_read_order,
 )
+# Import header/footer detection API (Milestone 2.5)
+from .header_footer import (
+    HEADER_FOOTER_CONFIDENCE_THRESHOLD,
+    HEADER_POSITION_TOLERANCE_FRACTION,
+    HEADER_REGION_FRACTION,
+    FOOTER_POSITION_TOLERANCE_FRACTION,
+    FOOTER_REGION_FRACTION,
+    ISOLATION_SCORE_WEIGHT,
+    MAX_HEADER_FOOTER_CHARS,
+    MIN_REPEATED_PAGES,
+    PAGE_NUMBER_SCORE_WEIGHT,
+    POSITION_CONSISTENCY_SCORE_WEIGHT,
+    REPETITION_SATURATION_PAGES,
+    REPETITION_SCORE_WEIGHT,
+    SHORT_HEADER_FOOTER_CHARS,
+    ClassifiedHeaderFooterParagraph,
+    DetectedHeaderFooter,
+    HeaderFooterLayout,
+    HeaderFooterPage,
+    HeaderFooterType,
+    classify_header_footer_paragraphs,
+    detect_headers_footers,
+)
 
 __all__ = [
     "PDFAnalysis",
@@ -160,8 +186,8 @@ __all__ = [
     "DetectedHeading",
     "HeadingPage",
     "HeadingLayout",
-    "classify_paragraphs",
-    "detect_headings",
+    "detect_headers_footers",
+    "classify_header_footer_paragraphs",
     "FONT_SIZE_RATIO_THRESHOLD",
     "STRONG_FONT_SIZE_RATIO_THRESHOLD",
     "MIN_HEADING_SIGNALS",
@@ -191,4 +217,22 @@ __all__ = [
     "PAGE_EDGE_PROXIMITY_SCORE",
     "LONG_PARAGRAPH_PENALTY",
     "BODY_LIKE_PENALTY",
+    "DetectedHeaderFooter",
+    "HeaderFooterLayout",
+    "HeaderFooterPage",
+    "HeaderFooterType",
+    "ClassifiedHeaderFooterParagraph",
+    "HEADER_REGION_FRACTION",
+    "FOOTER_REGION_FRACTION",
+    "MIN_REPEATED_PAGES",
+    "HEADER_POSITION_TOLERANCE_FRACTION",
+    "FOOTER_POSITION_TOLERANCE_FRACTION",
+    "REPETITION_SATURATION_PAGES",
+    "SHORT_HEADER_FOOTER_CHARS",
+    "MAX_HEADER_FOOTER_CHARS",
+    "HEADER_FOOTER_CONFIDENCE_THRESHOLD",
+    "REPETITION_SCORE_WEIGHT",
+    "POSITION_CONSISTENCY_SCORE_WEIGHT",
+    "ISOLATION_SCORE_WEIGHT",
+    "PAGE_NUMBER_SCORE_WEIGHT",
 ]
