@@ -1,4 +1,4 @@
-"""Deterministic reading-order reconstruction (Milestone 2.2).
+"""Deterministic reading-order reconstruction (Milestones 2.2 + 2.6).
 
 This module consumes the Milestone 2.1 layout-aware representation
 (:class:`~kindle_converter.pdf.layout.PageLayout` /
@@ -26,14 +26,11 @@ The reading-order contract
 * **What is NOT solved.** This milestone deliberately does *not* do
   paragraph reconstruction, line merging, heading detection,
   header/footer detection, font-based semantic classification, table
-  reconstruction, OCR, or image placement. It also does not attempt a
-  universal column detector: it recognizes only *obvious* horizontal
-  column separation (a clear gutter between columns whose blocks do not
-  overlap in x). When the columns are not obvious -- for example a
-  full-width title or caption whose x-range bridges the gutter -- the page
-  falls back to a plain top-to-bottom / left-to-right ordering rather than
-  guessing. M2.6 may replace the column-grouping step with a dedicated
-  column detector without changing this module's public API.
+  reconstruction, OCR, or image placement. M2.6 refines the column
+  hypothesis below but still recognizes only geometrically obvious
+  columns: full-width blocks are excluded from column clustering instead
+  of merging the page, and weak column evidence still falls back to the
+  exact M2.2 legacy ordering rather than guessing.
 
 Tolerance strategy
 ------------------
@@ -50,28 +47,44 @@ named constants centralize every tolerance:
 * ``COLUMN_OVERLAP_RATIO`` -- two blocks belong to the same column when
   their horizontal intervals overlap by at least this fraction of the
   *smaller* block's width.
+* ``COLUMN_MIN_BLOCKS`` -- minimum blocks per column cluster; rejects
+  columns built from isolated objects.
+* ``COLUMN_GAP_TOLERANCE_PT`` -- minimum edge-to-edge gutter between
+  accepted column clusters.
+* ``COLUMN_MAX_OVERLAP_RATIO`` -- maximum tolerated x-overlap between
+  accepted column clusters.
+* ``COLUMN_FULL_WIDTH_FRACTION`` / ``COLUMN_FULL_WIDTH_MIN_PT`` --
+  relative and absolute gates for the full-width (bridge) rule.
+* ``COLUMN_MIN_COVERAGE_FRACTION`` -- minimum share of eligible blocks
+  owned by accepted columns.
+* ``COLUMN_MAX_COUNT`` -- maximum accepted column clusters per page.
 
 Algorithm
 ---------
-For each page the reconstruction proceeds in three deterministic phases:
+For each page the reconstruction proceeds in deterministic phases:
 
-1. **Column grouping (conservative).** Build connected components of
-   blocks whose x-intervals overlap by at least ``COLUMN_OVERLAP_RATIO``
-   of the smaller width. Blocks that do not overlap horizontally form
-   separate components (obvious columns). A block that spans the whole
-   page bridges the components and merges them, which is the documented
-   conservative fallback.
-2. **Row grouping.** Within each component, blocks are sorted by
+1. **M2.6 multi-column hypothesis.** Exclude full-width blocks, cluster
+   the rest by the M2.2 x-overlap rule, and accept a multi-column split
+   only when every evidence gate above passes. The page is then emitted
+   as vertical bands: full-width separators in place, column regions
+   left-to-right with top-to-bottom blocks inside each column.
+2. **Legacy grouping (M2.2 fallback).** When the hypothesis is rejected,
+   build connected components of blocks whose x-intervals overlap by at
+   least ``COLUMN_OVERLAP_RATIO`` of the smaller width (a full-width
+   block bridges the components, which is the documented conservative
+   fallback).
+2. **Row grouping.** Within each component/column, blocks are sorted by
    ``(y0, x0, source_order)`` and greedily grouped into rows: a block
    joins the current row only if it vertically overlaps the previous
    block by more than ``ROW_OVERLAP_TOLERANCE_PT`` *and* its top edge is
    within ``ROW_TOP_TOLERANCE_PT`` of it. Each row is then ordered
    left-to-right by ``x0``.
-3. **Assembly.** The components are output left-to-right (by their leftmost
-   ``x0``), and inside each component the rows are output top-to-bottom.
-   Every comparison falls back to the original extraction ``order`` as a
-   final tie-breaker, so identical geometry always yields identical
-   output.
+3. **Assembly.** The components/columns are output left-to-right (by
+   their leftmost ``x0``), and inside each one the rows are output
+   top-to-bottom. Multi-column pages insert full-width separators at
+   their vertical positions. Every comparison falls back to the
+   original extraction ``order`` as a final tie-breaker, so identical
+   geometry always yields identical output.
 
 Result objects
 --------------
@@ -114,6 +127,38 @@ ROW_TOP_TOLERANCE_PT = 8.0
 #: component. Blocks in obviously separate columns do not overlap at all;
 #: a ratio of 0.5 keeps the rule conservative.
 COLUMN_OVERLAP_RATIO = 0.5
+
+#: Minimum number of column-eligible blocks each surviving column cluster
+#: must contain. Rejects "columns" built from a lone page number, heading,
+#: or decorative object.
+COLUMN_MIN_BLOCKS = 2
+
+#: Minimum horizontal gutter (in points) between two accepted column
+#: clusters, measured edge-to-edge. Small positive gaps still count;
+#: touching clusters do not.
+COLUMN_GAP_TOLERANCE_PT = 4.0
+
+#: Maximum allowed horizontal overlap between two accepted column clusters,
+#: as a fraction of the narrower cluster's width. Substantially overlapping
+#: clusters are one ragged single column, not two columns.
+COLUMN_MAX_OVERLAP_RATIO = 0.25
+
+#: Minimum fraction of the page's text width a block must span to count as
+#: full-width (bridge) content. Such blocks stay outside every column and
+#: split the page vertically instead of merging columns.
+COLUMN_FULL_WIDTH_FRACTION = 0.85
+
+#: Minimum absolute width (in points) for the full-width rule, so narrow
+#: pages or tiny blocks can never be labelled full-width on fraction alone.
+COLUMN_FULL_WIDTH_MIN_PT = 200.0
+
+#: Fraction of the column-eligible blocks that accepted column clusters
+#: must jointly cover. Prevents inventing columns from scattered content.
+COLUMN_MIN_COVERAGE_FRACTION = 0.5
+
+#: Maximum number of column clusters ever accepted on one page. Bounds the
+#: search; genuine layouts beyond this use the legacy ordering.
+COLUMN_MAX_COUNT = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,17 +284,17 @@ def reconstruct_page_order(page: LayoutPage) -> tuple[LayoutBlock, ...]:
     based only on bounding boxes and the M2.1 source order (used solely as
     a tie-breaker). The source layout is not modified.
 
-    An empty or single-block page returns its blocks unchanged.
+    An empty or single-block page returns its blocks unchanged. Multi
+    column pages use the M2.6 bridge-robust refinement; pages without
+    sufficient column evidence use the exact M2.2 legacy ordering.
     """
     if len(page.blocks) <= 1:
         return page.blocks
 
-    groups = _column_groups(page.blocks)
-    ordered: list[LayoutBlock] = []
-    for group in sorted(groups, key=_component_key):
-        for row in _rows(group):
-            ordered.extend(sorted(row, key=lambda b: (b.x0, b.order)))
-    return tuple(ordered)
+    refined = _multicolumn_order(page)
+    if refined is not None:
+        return refined
+    return _legacy_order(page.blocks)
 
 
 def reconstruct_read_order(
@@ -268,8 +313,17 @@ def reconstruct_read_order(
 
 
 # --------------------------------------------------------------------------- #
-# Column grouping (conservative x-overlap connected components)
+# Legacy ordering (M2.2, preserved bit-for-bit as the fallback)
 # --------------------------------------------------------------------------- #
+
+
+def _legacy_order(blocks: tuple[LayoutBlock, ...]) -> tuple[LayoutBlock, ...]:
+    """Emit the exact M2.2 ordering for ``blocks``."""
+    ordered: list[LayoutBlock] = []
+    for group in sorted(_column_groups(blocks), key=_component_key):
+        for row in _rows(group):
+            ordered.extend(sorted(row, key=lambda b: (b.x0, b.order)))
+    return tuple(ordered)
 
 
 def _column_groups(blocks: tuple[LayoutBlock, ...]) -> list[list[LayoutBlock]]:
@@ -318,6 +372,185 @@ def _component_key(group: list[LayoutBlock]) -> tuple[float, float, int]:
         min(b.y0 for b in group),
         min(b.order for b in group),
     )
+
+
+# --------------------------------------------------------------------------- #
+# Multi-column refinement (M2.6: bridge-robust column detection)
+# --------------------------------------------------------------------------- #
+
+
+def _multicolumn_order(page: LayoutPage) -> tuple[LayoutBlock, ...] | None:
+    """Return the M2.6 column-major order, or ``None`` when evidence is weak.
+
+    ``None`` means the caller must use :func:`_legacy_order` unchanged, so
+    ordinary single-column pages keep their exact M2.2 ordering. The
+    refinement excludes full-width (bridge) blocks from column clustering,
+    accepts a multi-column split only when every evidence threshold passes,
+    then emits vertical bands (full-width separators in place, column
+    regions left-to-right with top-to-bottom blocks inside each column).
+    """
+    blocks = page.blocks
+    span_width = max(b.x1 for b in blocks) - min(b.x0 for b in blocks)
+    full_ids = {id(b) for b in blocks if _is_full_width(b, span_width)}
+    eligible = tuple(b for b in blocks if id(b) not in full_ids)
+    if len(eligible) < 2 * COLUMN_MIN_BLOCKS:
+        return None
+    columns = sorted(
+        (
+            cluster
+            for cluster in _column_groups(eligible)
+            if len(cluster) >= COLUMN_MIN_BLOCKS
+            and not any(_is_full_width(b, span_width) for b in cluster)
+            and not _cluster_is_singleton_x_outlier(cluster, eligible)
+        ),
+        key=_component_key,
+    )
+    if len(columns) < 2 or len(columns) > COLUMN_MAX_COUNT:
+        return None
+    if sum(len(c) for c in columns) < COLUMN_MIN_COVERAGE_FRACTION * len(
+        eligible
+    ):
+        return None
+    extents = [_extent(c) for c in columns]
+    for (lx0, lx1, ly0, ly1), (rx0, rx1, ry0, ry1) in zip(
+        extents, extents[1:]
+    ):
+        overlap = min(lx1, rx1) - max(lx0, rx0)
+        narrower = min(lx1 - lx0, rx1 - rx0)
+        if narrower <= 0:
+            return None
+        if overlap > COLUMN_MAX_OVERLAP_RATIO * narrower:
+            return None
+        if min(ly1, ry1) - max(ly0, ry0) <= 0:
+            return None
+        if rx0 - lx1 < COLUMN_GAP_TOLERANCE_PT:
+            # No real gutter between wide neighbours: keep legacy order.
+            return None
+    owned_ids = {id(b) for c in columns for b in c}
+    separators = [b for b in blocks if id(b) not in owned_ids]
+    return _assemble_bands(columns, separators)
+
+
+def _is_full_width(block: LayoutBlock, span_width: float) -> bool:
+    """Return whether ``block`` spans most of the page's text width.
+
+    Full-width blocks (chapter headings, intro paragraphs, bridge blocks)
+    are kept out of every column so a single wide block cannot collapse the
+    column structure. Both a relative fraction and an absolute floor must
+    pass, so narrow pages or tiny blocks never qualify on fraction alone.
+    """
+    if span_width <= 0:
+        return False
+    return (
+        block.width >= COLUMN_FULL_WIDTH_FRACTION * span_width
+        and block.width >= COLUMN_FULL_WIDTH_MIN_PT
+    )
+
+
+def _extent(cluster: list[LayoutBlock]) -> tuple[float, float, float, float]:
+    """Return the ``(x0, x1, y0, y1)`` bounding extent of ``cluster``."""
+    return (
+        min(b.x0 for b in cluster),
+        max(b.x1 for b in cluster),
+        min(b.y0 for b in cluster),
+        max(b.y1 for b in cluster),
+    )
+
+
+def _cluster_is_singleton_x_outlier(
+    cluster: list[LayoutBlock], eligible: tuple[LayoutBlock, ...]
+) -> bool:
+    """Return whether a 2-block cluster is only joined via one bridge block.
+
+    Two same-x blocks linked by a single block overlapping both (an A-B-C
+    chain where A and C never overlap each other) are weaker evidence than
+    a genuine column. Reject such chains so isolated centered headings do
+    not glue one side of the page into a false column split.
+    """
+    if len(cluster) != COLUMN_MIN_BLOCKS:
+        return False
+    first, second = cluster
+    if _intervals_overlap(first, second):
+        return False
+    bridges = [
+        b
+        for b in eligible
+        if b not in cluster
+        and _intervals_overlap(b, first)
+        and _intervals_overlap(b, second)
+    ]
+    return len(bridges) <= 1
+
+
+def _intervals_overlap(a: LayoutBlock, b: LayoutBlock) -> bool:
+    """Return whether ``a`` and ``b`` satisfy the column x-overlap rule."""
+    overlap = min(a.x1, b.x1) - max(a.x0, b.x0)
+    if overlap <= 0:
+        return False
+    return overlap >= COLUMN_OVERLAP_RATIO * min(a.width, b.width)
+
+
+def _assemble_bands(
+    columns: list[list[LayoutBlock]], separators: list[LayoutBlock]
+) -> tuple[LayoutBlock, ...]:
+    """Merge column clusters and full-width separators into reading order.
+
+    Separators entirely above (below) the column region are emitted before
+    (after) it; separators vertically inside the region act as cuts that
+    split each column into above/below segments, so a heading between
+    column rows keeps its vertical position without merging the columns.
+    Inside each band, columns read left-to-right and blocks read
+    top-to-bottom via the M2.2 row grouping.
+    """
+    owned = [b for column in columns for b in column]
+    top = min(b.y0 for b in owned)
+    bottom = max(b.y1 for b in owned)
+    key = lambda b: (b.y0, b.x0, b.order)
+    before = sorted((s for s in separators if s.y1 <= top), key=key)
+    after = sorted((s for s in separators if s.y0 >= bottom), key=key)
+    before_ids = {id(s) for s in before}
+    after_ids = {id(s) for s in after}
+    cuts = sorted(
+        (s for s in separators if id(s) not in before_ids | after_ids),
+        key=key,
+    )
+    ordered: list[LayoutBlock] = list(before)
+    if not cuts:
+        for column in columns:
+            ordered.extend(_column_emit(column))
+    else:
+        centers = [(_y_center(s)) for s in cuts]
+
+        def band(block: LayoutBlock) -> int:
+            center = _y_center(block)
+            index = 0
+            for cut_center in centers:
+                if cut_center <= center:
+                    index += 1
+            return index
+
+        for index in range(len(cuts) + 1):
+            for column in columns:
+                ordered.extend(
+                    _column_emit([b for b in column if band(b) == index])
+                )
+            if index < len(cuts):
+                ordered.append(cuts[index])
+    ordered.extend(after)
+    return tuple(ordered)
+
+
+def _column_emit(blocks: list[LayoutBlock]) -> list[LayoutBlock]:
+    """Order one column (segment) top-to-bottom via M2.2 row grouping."""
+    ordered: list[LayoutBlock] = []
+    for row in _rows(list(blocks)):
+        ordered.extend(sorted(row, key=lambda b: (b.x0, b.order)))
+    return ordered
+
+
+def _y_center(block: LayoutBlock) -> float:
+    """Return the vertical midpoint of ``block``."""
+    return (block.y0 + block.y1) / 2.0
 
 
 # --------------------------------------------------------------------------- #
