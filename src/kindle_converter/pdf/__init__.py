@@ -179,6 +179,14 @@ from .page_numbers import (
     remove_page_numbers,
 )
 
+# Table of contents generation API (Milestone 2.11)
+from .toc import (
+    TOC_CHAPTER_LEVEL,
+    TableOfContents,
+    TOCEntry,
+    generate_toc,
+)
+
 __all__ = [
     "PDFAnalysis",
     "PDFAnalysisError",
@@ -297,4 +305,9 @@ __all__ = [
     "PageNumberLocation",
     "PageNumberRemovalResult",
     "remove_page_numbers",
+    # Table of contents generation (Milestone 2.11)
+    "TOC_CHAPTER_LEVEL",
+    "TableOfContents",
+    "TOCEntry",
+    "generate_toc",
 ]
