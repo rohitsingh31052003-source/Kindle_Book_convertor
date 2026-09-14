@@ -161,6 +161,15 @@ from .reconstruction import (
     reconstruct_layout,
 )
 
+# Chapter detection API (Milestone 2.9)
+from .chapters import (
+    ChapterDetectionResult,
+    ChapterNumberType,
+    DetectedChapter,
+    detect_chapters,
+    detect_chapters_simple,
+)
+
 __all__ = [
     "PDFAnalysis",
     "PDFAnalysisError",
@@ -267,4 +276,10 @@ __all__ = [
     "build_reconstructed_document",
     "reconstruct_layout",
     "GENERIC_HEADING_LEVEL",
+    # Chapter detection (Milestone 2.9)
+    "ChapterDetectionResult",
+    "ChapterNumberType",
+    "DetectedChapter",
+    "detect_chapters",
+    "detect_chapters_simple",
 ]

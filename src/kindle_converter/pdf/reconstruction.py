@@ -15,6 +15,8 @@ without re-running or re-deriving any detection:
   classification of every paragraph.
 * M2.5 (:mod:`kindle_converter.pdf.header_footer`) provides the
   header/footer (page furniture) classification.
+* M2.9 (:mod:`kindle_converter.pdf.chapters`) provides chapter detection
+  on top of the integrated representation.
 
 Integration rules
 -----------------
@@ -48,6 +50,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from ..document import Book, BookMetadata, Chapter, Heading, PageBreak, Paragraph
 from .header_footer import (
@@ -68,6 +71,9 @@ from .paragraphs import (
     reconstruct_paragraphs,
 )
 from .reading_order import reconstruct_read_order
+
+if TYPE_CHECKING:
+    from .chapters import ChapterDetectionResult
 
 
 class ElementKind(StrEnum):
@@ -120,6 +126,7 @@ class ReconstructedDocument:
     paragraphs: ParagraphLayout | None = None
     headings: HeadingLayout | None = None
     header_footer: HeaderFooterLayout | None = None
+    chapters: "ChapterDetectionResult | None" = None
 
     @property
     def page_count(self) -> int:
@@ -275,6 +282,9 @@ def reconstruct_layout(
     layout, M2.5 header/footer layout) so callers keep access to the
     original detections and provenance.
 
+    The returned ReconstructedDocument also includes M2.9 chapter detection
+    results in its ``chapters`` field.
+
     Raises
     ------
     TypeError
@@ -292,6 +302,18 @@ def reconstruct_layout(
     furniture = detect_headers_footers(paragraph_layout)
     document = build_reconstructed_document(
         paragraph_layout, heading_layout, furniture
+    )
+    # M2.9: Chapter detection on the integrated representation
+    from .chapters import detect_chapters
+
+    chapters = detect_chapters(document)
+    # Reconstruct document with chapters attached (immutable, so create new)
+    document = ReconstructedDocument(
+        pages=document.pages,
+        paragraphs=document.paragraphs,
+        headings=document.headings,
+        header_footer=document.header_footer,
+        chapters=chapters,
     )
     return document, paragraph_layout, heading_layout, furniture
 
