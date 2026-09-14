@@ -150,6 +150,17 @@ from .header_footer import (
     detect_headers_footers,
 )
 
+# Integrated reconstruction API (Milestone 2.7)
+from .reconstruction import (
+    GENERIC_HEADING_LEVEL,
+    ElementKind,
+    ReconstructedDocument,
+    ReconstructedElement,
+    ReconstructedPage,
+    build_reconstructed_document,
+    reconstruct_layout,
+)
+
 __all__ = [
     "PDFAnalysis",
     "PDFAnalysisError",
@@ -249,4 +260,11 @@ __all__ = [
     "POSITION_CONSISTENCY_SCORE_WEIGHT",
     "ISOLATION_SCORE_WEIGHT",
     "PAGE_NUMBER_SCORE_WEIGHT",
+    "ElementKind",
+    "ReconstructedDocument",
+    "ReconstructedElement",
+    "ReconstructedPage",
+    "build_reconstructed_document",
+    "reconstruct_layout",
+    "GENERIC_HEADING_LEVEL",
 ]

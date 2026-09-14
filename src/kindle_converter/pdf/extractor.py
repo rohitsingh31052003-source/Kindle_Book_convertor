@@ -1,22 +1,12 @@
-"""First-pass PDF text extraction (Milestone 1.3, extended in M2.1).
+"""First-pass PDF text extraction (Milestones 1.3 + 2.7).
 
 This module converts a *text-based* PDF into the format-independent
-:mod:`kindle_converter.document` book model. It is a deliberately simple
-first extraction layer:
-
-* It consumes the layout-aware :mod:`kindle_converter.pdf.layout`
-  representation -- the single PDF extraction boundary -- and reads its
-  per-page blocks instead of calling PyMuPDF directly. Geometry and
-  per-span metadata therefore stay available to later reconstruction
-  stages without changing this module's behavior.
-* It applies only conservative, deterministic normalization and
-  paragraphization (see :func:`_same_paragraph`).
-* It performs **no** semantic reconstruction (no chapter detection, no
-  heading detection, no header/footer stripping) -- that is a later
-  structural stage.
+:mod:`kindle_converter.document` book model.
 
 Pipeline: PDF -> :func:`analyze_pdf` (the analyzer) -> layout extraction
-(:mod:`kindle_converter.pdf.layout`) -> paragraphized text extraction ->
+(:mod:`kindle_converter.pdf.layout`) -> M2 reconstruction
+(:mod:`kindle_converter.pdf.reconstruction`: reading order, paragraphs,
+headings, header/footer filtering) ->
 :class:`kindle_converter.document.models.Book`.
 
 The extractor knows nothing about EPUB/AZW3 generation: the document
@@ -30,47 +20,24 @@ import re
 
 import pymupdf
 
-from ..document import (
-    Book,
-    BookMetadata,
-    Chapter,
-    DocumentBlock,
-    PageBreak,
-    Paragraph,
-)
+from ..document import Book, BookMetadata
 from .analyzer import (
     EmptyPDFError,
     NoContentError,
     PDFReadError,
     analyze_pdf,
 )
-from .layout import LayoutPage, extract_page_layout
+from .layout import extract_page_layout
 from .models import PDFType
+from .reconstruction import (
+    deduplicate_layout,
+    reconstruct_layout,
+    reconstructed_document_to_book,
+)
 
 PathLike = str | os.PathLike[str]
 
-#: The vertical gap between two consecutive lines (measured from the bottom
-#: edge of the upper line to the top edge of the lower line) must exceed this
-#: multiple of the page's median line height before the lower line is treated
-#: as starting a new paragraph. In practice a single blank line yields a gap
-#: of roughly one line height, while consecutive wrapped lines overlap
-#: slightly (negative gap). 0.5 cleanly separates those two cases.
-PARAGRAPH_GAP_FACTOR = 0.5
-
-#: A line whose left edge lies at least this many points to the right of the
-#: preceding line's left edge starts a new paragraph. Wrapped continuation
-#: lines always share the left margin; an indented line is the classic
-#: signal of a new paragraph in typeset documents.
-PARAGRAPH_INDENT_PT = 12.0
-
-#: The largest number of characters that makes a line "indisputably
-#: isolated": a line of this length or shorter becomes its own paragraph
-#: even when it is tightly packed with the surrounding lines, so that a
-#: lone page number or a terse footer is not glued onto the body text.
-SHORT_LINE_THRESHOLD = 8
-
 RE_SPACE = re.compile(r"\s+")
-RE_LEADING_SPACES = re.compile(r"^ {1,4}")
 
 # --------------------------------------------------------------------------- #
 # Exceptions
@@ -202,14 +169,16 @@ def _close_if_owned(
 
 
 def _build_book(doc: pymupdf.Document) -> Book:
-    """Build the document-model :class:`Book` from a text PDF."""
+    """Build the document-model :class:`Book` from a text PDF.
+
+    The M2.7 integrated reconstruction (reading order, paragraphs,
+    headings, header/footer filtering) produces the body content; page
+    boundaries map to ``PageBreak`` markers exactly as in M1.
+    """
     metadata = _build_metadata(doc)
-    pages = _extract_pages(doc)
-    book = Book(metadata=metadata)
-    chapter = Chapter(title=metadata.title)
-    _append_blocks(chapter.blocks, pages)
-    book.add_chapter(chapter)
-    return book
+    layout = deduplicate_layout(extract_page_layout(doc))
+    document, _, _, _ = reconstruct_layout(layout)
+    return reconstructed_document_to_book(document, metadata)
 
 
 def _build_metadata(doc: pymupdf.Document) -> BookMetadata:
@@ -227,197 +196,6 @@ def _build_metadata(doc: pymupdf.Document) -> BookMetadata:
         publisher=meta.get("creator", ""),
         identifier=meta.get("subject", ""),
     )
-
-
-# --------------------------------------------------------------------------- #
-# Page extraction
-# --------------------------------------------------------------------------- #
-
-
-def _extract_pages(doc: pymupdf.Document) -> list[list[Paragraph]]:
-    """Return one list of :class:`Paragraph` blocks per PDF page.
-
-    The layout-aware representation (:func:`extract_page_layout`) is the
-    single extraction boundary the extractor consumes; the raw lines for
-    paragraphization are derived from its per-page blocks. Pages that carry
-    only repeated non-body noise (headers, footers, page numbers) may
-    produce an empty list; the surrounding ``PageBreak`` markers are still
-    emitted by the caller so page boundaries survive.
-    """
-    layout = extract_page_layout(doc)
-    pages: list[list[Paragraph]] = []
-    for layout_page in layout.pages:
-        try:
-            lines = _extract_lines(layout_page)
-        except Exception as exc:
-            raise PDFReadError(
-                f"Failed to extract text from page "
-                f"{layout_page.page_number} of the PDF"
-            ) from exc
-        pages.append(lines)
-    return pages
-
-
-def _extract_lines(layout_page: LayoutPage) -> list[Paragraph]:
-    """Extract, normalize, and paragraphize the text of one page.
-
-    The raw lines (see :func:`_raw_lines`) are grouped into paragraphs with
-    a deterministic geometric rule, documented on :func:`_same_paragraph`:
-
-    * consecutive lines that sit close together and share a left margin are
-      merged into one paragraph,
-    * a line with a clear left indent starts a new paragraph,
-    * a line that sits unusually high (roughly half a blank line or more
-      above the previous one) also starts a new paragraph,
-    * a very short line is never glued onto the surrounding text.
-
-    Paragraph text is reflowed by joining the merged lines with a single
-    space, which also normalizes the accidental missing-space artifacts that
-    ``"dict"`` mode produces at line breaks.
-    """
-    raw = _raw_lines(layout_page)
-    if not raw:
-        return []
-
-    gap_threshold = PARAGRAPH_GAP_FACTOR * _median_line_height(raw)
-    paragraphs: list[Paragraph] = []
-    current: list[RawLine] = []
-    for line in raw:
-        if len(line.text) <= SHORT_LINE_THRESHOLD:
-            # A very short line (page number, terse footer) is never glued
-            # onto the surrounding text; it stands alone on both sides.
-            if current:
-                paragraphs.append(Paragraph(text=_reflow(current)))
-                current = []
-            paragraphs.append(Paragraph(text=_reflow([line])))
-            continue
-        if current and not _same_paragraph(current[-1], line, gap_threshold):
-            paragraphs.append(Paragraph(text=_reflow(current)))
-            current = []
-        current.append(line)
-    if current:
-        paragraphs.append(Paragraph(text=_reflow(current)))
-
-    for paragraph in paragraphs:
-        paragraph.text = _collapse_spaces(paragraph.text)
-    return paragraphs
-
-
-# --------------------------------------------------------------------------- #
-# Raw line collection (dict layout, order preserved as provided)
-# --------------------------------------------------------------------------- #
-
-
-class RawLine:
-    """A single physical text line on a page."""
-
-    __slots__ = ("text", "x0", "y0", "y1")
-
-    def __init__(
-        self, text: str, *, x0: float, y0: float, y1: float
-    ) -> None:
-        self.text = text
-        self.x0 = x0
-        self.y0 = y0
-        self.y1 = y1
-
-
-def _raw_lines(layout_page: LayoutPage) -> list[RawLine]:
-    """Return the visible text lines of one page in "dict" extraction order.
-
-    The lines come from the page's layout-aware :class:`LayoutPage`, whose
-    blocks preserve PyMuPDF's ``"dict"`` stream order. We deliberately do
-    **not** re-sort these lines (for example by ``(y, x)`` position): that
-    kind of layout reconstruction -- including multi-column handling --
-    belongs to a later milestone, and a naive global sort would interleave
-    columns line by line. Reading order is therefore only as reliable as
-    the order PyMuPDF's "dict" mode provides.
-    """
-    lines_out: list[RawLine] = []
-    for block in layout_page.blocks:
-        for line in block.lines:
-            x0, y0, _x1, y1 = line.bbox
-            text = _normalize_line(line.text)
-            if not text:
-                continue
-            candidate = RawLine(text, x0=x0, y0=y0, y1=y1)
-            # Some PDFs draw text twice at the exact same position to fake a
-            # bold weight. Only a byte-identical line that *overlaps* the
-            # previous one is a duplicate; identical lines stacked at
-            # different baselines (stanzas, table rows) are all kept.
-            if lines_out and _overlaps(lines_out[-1], candidate):
-                continue
-            lines_out.append(candidate)
-    return lines_out
-
-
-def _overlaps(upper: RawLine, lower: RawLine) -> bool:
-    """Return whether two lines overlap vertically and are byte-identical.
-
-    This is the conservative "drawn twice for emphasis" test: the two lines
-    must carry the same text *and* their vertical extents must intersect.
-    """
-    if upper.text != lower.text:
-        return False
-    return upper.y0 < lower.y1 and lower.y0 < upper.y1
-
-
-# --------------------------------------------------------------------------- #
-# Paragraph grouping
-# --------------------------------------------------------------------------- #
-
-
-def _same_paragraph(
-    upper: RawLine, lower: RawLine, gap_threshold: float
-) -> bool:
-    """Return whether ``lower`` continues the paragraph started by ``upper``.
-
-    The rule is fully deterministic and intentionally conservative. A line
-    is *not* a continuation (i.e. starts a new paragraph) when either:
-
-    1. The vertical gap between the two lines exceeds ``gap_threshold``
-       (``PARAGRAPH_GAP_FACTOR *`` the page's median line height) -- roughly
-       half a blank line or more -- which separates distinct paragraphs.
-    2. Its left edge sits at least ``PARAGRAPH_INDENT_PT`` points to the
-       right of ``upper``'s left edge -- an indented first line.
-
-    The caller isolates very short lines (page numbers, terse footers)
-    before this rule runs. This is *not* semantic detection: no heading,
-    chapter, header, or footer logic lives here.
-    """
-    if lower.y0 - upper.y1 > gap_threshold:
-        return False
-    if lower.x0 - upper.x0 >= PARAGRAPH_INDENT_PT:
-        return False
-    return True
-
-
-def _median_line_height(lines: list[RawLine]) -> float:
-    """Return the median height of ``lines`` (``1.0`` if empty)."""
-    if not lines:
-        return 1.0
-    heights = sorted(line.y1 - line.y0 for line in lines)
-    middle = len(heights) // 2
-    if len(heights) % 2 == 1:
-        return heights[middle]
-    return (heights[middle - 1] + heights[middle]) / 2.0
-
-
-def _reflow(lines: list[RawLine]) -> str:
-    """Join the lines of one paragraph into a single normalized string.
-
-    The ``"dict"`` layout drops the inter-word space at most line breaks, so
-    continuation lines are joined with a single space. A paragraph-start
-    indent of up to four characters is stripped. Leading and trailing
-    whitespace is removed.
-    """
-    parts: list[str] = []
-    for index, line in enumerate(lines):
-        text = line.text
-        if index == 0:
-            text = RE_LEADING_SPACES.sub("", text)
-        parts.append(text)
-    return " ".join(parts).strip()
 
 
 # --------------------------------------------------------------------------- #
@@ -445,22 +223,3 @@ def _collapse_spaces(text: str) -> str:
     paragraph repeated whitespace is an artifact of PDF layout.
     """
     return RE_SPACE.sub(" ", text)
-
-
-# --------------------------------------------------------------------------- #
-# Block assembly
-# --------------------------------------------------------------------------- #
-
-
-def _append_blocks(
-    blocks: list[DocumentBlock], pages: list[list[Paragraph]]
-) -> None:
-    """Append the per-page paragraphs and ``PageBreak`` markers to ``blocks``.
-
-    Every page boundary becomes exactly one :class:`PageBreak` marker,
-    placed as the first block of each page after the first.
-    """
-    for page_index, paragraphs in enumerate(pages):
-        if page_index > 0:
-            blocks.append(PageBreak())
-        blocks.extend(paragraphs)

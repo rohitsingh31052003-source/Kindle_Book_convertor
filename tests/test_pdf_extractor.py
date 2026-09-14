@@ -221,12 +221,10 @@ class TestBasicExtraction:
     def test_lines_follow_dict_order_not_global_sort(self, tmp_path) -> None:
         doc = pymupdf.open()
         page = _new_page(doc)
-        # PyMuPDF's "dict" layout returns text blocks in the order they are
-        # drawn in the content stream, which is not necessarily top-to-
-        # bottom. The extractor must preserve that order and must NOT apply a
-        # global (y0, x0) sort: a naive sort would silently reorder the
-        # content (and would interleave multi-column pages line by line).
-        # Multi-column/layout reconstruction is a later milestone.
+        # M2.7 integrated reading-order reconstruction (M2.2/M2.6) now
+        # governs in-page order: text is emitted top-to-bottom rather than
+        # in raw PyMuPDF "dict" content-stream order. The content-stream
+        # order is preserved only as ``source_order`` provenance.
         lower = "THE LOWER LINE IS DRAWN FIRST IN THE CONTENT STREAM"
         upper = "THE UPPER LINE IS DRAWN SECOND IN THE CONTENT STREAM"
         page.insert_text((72, 700), lower, fontsize=12)
@@ -237,7 +235,7 @@ class TestBasicExtraction:
         book = extract_book(tmp_path / "dictorder.pdf")
         text = all_text(book)
         assert lower in text and upper in text
-        assert text.index(lower) < text.index(upper)
+        assert text.index(upper) < text.index(lower)
 
     def test_page_boundaries_are_preserved(self, tmp_path) -> None:
         path = make_text_pdf(tmp_path / "pages.pdf", pages=3)
