@@ -170,6 +170,15 @@ from .chapters import (
     detect_chapters_simple,
 )
 
+# Page-number removal API (Milestone 2.10)
+from .page_numbers import (
+    MIN_BARE_SEQUENCE_PAGES,
+    DetectedPageNumber,
+    PageNumberLocation,
+    PageNumberRemovalResult,
+    remove_page_numbers,
+)
+
 __all__ = [
     "PDFAnalysis",
     "PDFAnalysisError",
@@ -282,4 +291,10 @@ __all__ = [
     "DetectedChapter",
     "detect_chapters",
     "detect_chapters_simple",
+    # Page-number removal (Milestone 2.10)
+    "MIN_BARE_SEQUENCE_PAGES",
+    "DetectedPageNumber",
+    "PageNumberLocation",
+    "PageNumberRemovalResult",
+    "remove_page_numbers",
 ]
