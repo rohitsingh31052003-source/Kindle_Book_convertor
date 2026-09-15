@@ -20,6 +20,15 @@ class BookMetadata:
 
     Unknown fields are represented by an empty string so that callers can
     treat them as "not provided" without a third state.
+
+    ``description`` and ``subject`` were added in M2.12 (Metadata handling).
+    Like every other field they default to the empty string, so the model
+    stays fully backwards compatible with existing ``Book`` construction.
+    ``BookMetadata`` remains intentionally mutable to match the documented
+    project convention established before M2.12 (see the existing
+    ``test_values_are_updateable``). Determinism is provided by the metadata
+    *handling* layer (:mod:`kindle_converter.pdf.metadata`), which never
+    mutates its inputs and returns fresh objects.
     """
 
     title: str = ""
@@ -27,12 +36,23 @@ class BookMetadata:
     language: str = ""
     publisher: str = ""
     identifier: str = ""
+    description: str = ""
+    subject: str = ""
 
     @property
     def is_empty(self) -> bool:
         """Whether no metadata field has a value."""
-        return not any((self.title, self.author, self.language,
-                        self.publisher, self.identifier))
+        return not any(
+            (
+                self.title,
+                self.author,
+                self.language,
+                self.publisher,
+                self.identifier,
+                self.description,
+                self.subject,
+            )
+        )
 
 
 @dataclass(slots=True)

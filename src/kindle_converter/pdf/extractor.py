@@ -184,18 +184,16 @@ def _build_book(doc: pymupdf.Document) -> Book:
 def _build_metadata(doc: pymupdf.Document) -> BookMetadata:
     """Map the PyMuPDF metadata dictionary onto :class:`BookMetadata`.
 
-    PDF "subject" maps to ``BookMetadata.identifier`` so the keyword does
-    not silently disappear from the document model. ``language`` is not a
-    standard PyMuPDF metadata key, so it is left empty unless present.
+    Delegates to the M2.12 public API :func:`kindle_converter.pdf.metadata.
+    extract_pdf_metadata`, which preserves the project's established mapping
+    (``creator`` -> ``publisher``, ``subject`` -> ``identifier``) so a PDF
+    keyword does not silently disappear from the document model. Passing the
+    already-open ``doc`` keeps caller ownership intact (it is never closed
+    here).
     """
-    meta = doc.metadata or {}
-    return BookMetadata(
-        title=meta.get("title", ""),
-        author=meta.get("author", ""),
-        language=meta.get("language", ""),
-        publisher=meta.get("creator", ""),
-        identifier=meta.get("subject", ""),
-    )
+    from .metadata import extract_pdf_metadata
+
+    return extract_pdf_metadata(doc)
 
 
 # --------------------------------------------------------------------------- #

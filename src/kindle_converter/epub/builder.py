@@ -199,8 +199,8 @@ def _add_metadata(
 
     Only metadata that actually exists on the book is emitted. ``title`` and
     ``language`` are always present because EbookLib's package requires them
-    (empty values fall back to EPUB-safe defaults). ``author`` and
-    ``publisher`` are only added when non-empty.
+    (empty values fall back to EPUB-safe defaults). ``author``, ``publisher``,
+    ``description``, and ``subject`` are only added when non-empty (M2.12).
     """
     epub_book.set_title(metadata.title or DEFAULT_TITLE)
     epub_book.set_language(language or metadata.language or DEFAULT_LANGUAGE)
@@ -208,6 +208,10 @@ def _add_metadata(
         epub_book.add_author(metadata.author)
     if metadata.publisher:
         epub_book.add_metadata("DC", "publisher", metadata.publisher)
+    if metadata.description:
+        epub_book.add_metadata("DC", "description", metadata.description)
+    if metadata.subject:
+        epub_book.add_metadata("DC", "subject", metadata.subject)
 
 
 # --------------------------------------------------------------------------- #

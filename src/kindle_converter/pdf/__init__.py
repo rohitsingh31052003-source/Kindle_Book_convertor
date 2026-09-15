@@ -187,6 +187,12 @@ from .toc import (
     generate_toc,
 )
 
+# Metadata handling API (Milestone 2.12)
+from .metadata import (
+    extract_pdf_metadata,
+    resolve_metadata,
+)
+
 __all__ = [
     "PDFAnalysis",
     "PDFAnalysisError",
@@ -310,4 +316,7 @@ __all__ = [
     "TableOfContents",
     "TOCEntry",
     "generate_toc",
+    # Metadata handling (Milestone 2.12)
+    "extract_pdf_metadata",
+    "resolve_metadata",
 ]
