@@ -35,6 +35,12 @@ implemented in the ``header_footer`` submodule (Milestone 2.5): a
 conservative, deterministic, detection-only layer that classifies repeated
 page-level headers and footers from the M2.3 paragraph representation
 (``detect_headers_footers`` / ``classify_header_footer_paragraphs``).
+
+The ``renderer`` submodule (Milestone 3.2) rasterizes PDF pages into
+deterministic RGB pixmaps at an explicit DPI (``render_page`` /
+``render_pages``), producing the typed :class:`RenderedPage` values that the
+future OCR stage (M3.3) will consume. Rendering is strictly
+``PDF page -> raster image``: no OCR and no image preprocessing.
 """
 from .analyzer import (
     EmptyPDFError,
@@ -207,6 +213,17 @@ from .images import (
     extract_pdf_images,
 )
 
+# Page rendering API (Milestone 3.2)
+from .renderer import (
+    DEFAULT_RENDER_DPI,
+    MAX_RENDER_DPI,
+    MIN_RENDER_DPI,
+    PDFRenderingError,
+    RenderedPage,
+    render_page,
+    render_pages,
+)
+
 __all__ = [
     "PDFAnalysis",
     "PDFAnalysisError",
@@ -344,4 +361,12 @@ __all__ = [
     "ImageExtractionResult",
     "ImagePlacement",
     "extract_pdf_images",
+    # Page rendering (Milestone 3.2)
+    "DEFAULT_RENDER_DPI",
+    "MIN_RENDER_DPI",
+    "MAX_RENDER_DPI",
+    "PDFRenderingError",
+    "RenderedPage",
+    "render_page",
+    "render_pages",
 ]

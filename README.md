@@ -296,7 +296,7 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 ### Milestone 3 — Scanned PDFs and OCR
 
 * [x] Detect scanned PDFs
-* [ ] Render PDF pages
+* [x] Render PDF pages
 * [ ] OCR processing
 * [ ] OCR cleanup
 * [ ] Mixed text/image document handling
