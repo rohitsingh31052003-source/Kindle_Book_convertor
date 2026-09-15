@@ -214,6 +214,40 @@ pytest
 For full development setup (including the runtime dependencies), use the
 editable install described above.
 
+### OCR (scanned PDFs)
+
+OCR support (Milestone 3.3) is optional and has **two distinct
+requirements**. The Tesseract executable is installed by Tesseract's own
+installer, never by this project.
+
+1. **Python packages (optional `ocr` extra):** the `pytesseract` and
+   `Pillow` wrappers.
+
+   ```bash
+   pip install -e ".[ocr]"
+   ```
+
+   The OCR API stays importable without them; only the built-in
+   `TesseractEngine` needs the extra.
+
+2. **Tesseract executable (external runtime requirement):** the
+   `tesseract` command must be discoverable on `PATH`, or its explicit
+   path passed to `TesseractEngine(tesseract_cmd=...)`. The integration
+   tests also honour the `TESSERACT_CMD` environment variable:
+
+   ```bash
+   # Windows example (adjust to your install location)
+   TESSERACT_CMD="C:\Program Files\Tesseract-OCR\tesseract.exe" pytest
+
+   # Verify availability
+   tesseract --version
+   tesseract --list-langs   # 'eng' must be listed
+   ```
+
+   When neither `TESSERACT_CMD` nor a `PATH`-discoverable `tesseract` is
+   available, the optional OCR integration tests skip cleanly; the core
+   test suite never requires Tesseract.
+
 ### Building the package
 
 ```bash
@@ -297,7 +331,7 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 
 * [x] Detect scanned PDFs
 * [x] Render PDF pages
-* [ ] OCR processing
+* [x] OCR processing
 * [ ] OCR cleanup
 * [ ] Mixed text/image document handling
 * [ ] Improve structural reconstruction

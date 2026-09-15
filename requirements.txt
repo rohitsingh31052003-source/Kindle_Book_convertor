@@ -4,3 +4,9 @@ ebooklib>=0.19,<1
 
 # Development / test dependencies (mirrors [project.optional-dependencies].dev)
 pytest>=8.0,<9
+
+# Optional OCR dependencies (mirrors [project.optional-dependencies].ocr)
+# Note: the Tesseract OCR executable is an external runtime requirement and
+# is not installed by pip (see README "OCR (scanned PDFs)").
+pytesseract>=0.3.13,<1
+Pillow>=10.0,<13

@@ -34,6 +34,13 @@ Repository = "https://github.com/rohitsingh31052003-source/Kindle_Book_convertor
 dev = [
     "pytest>=8.0,<9",
 ]
+# Optional OCR support (Milestone 3.3): Python wrappers for the Tesseract
+# executable. The Tesseract binary itself is an external runtime requirement
+# and is NOT installed by pip; see README "OCR (scanned PDFs)".
+ocr = [
+    "pytesseract>=0.3.13,<1",
+    "Pillow>=10.0,<13",
+]
 
 [tool.setuptools]
 package-dir = { "" = "src" }

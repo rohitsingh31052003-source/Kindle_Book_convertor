@@ -39,8 +39,16 @@ page-level headers and footers from the M2.3 paragraph representation
 The ``renderer`` submodule (Milestone 3.2) rasterizes PDF pages into
 deterministic RGB pixmaps at an explicit DPI (``render_page`` /
 ``render_pages``), producing the typed :class:`RenderedPage` values that the
-future OCR stage (M3.3) will consume. Rendering is strictly
+next OCR stage (M3.3) consumes. Rendering is strictly
 ``PDF page -> raster image``: no OCR and no image preprocessing.
+
+The ``ocr`` submodule (Milestone 3.3) consumes those :class:`RenderedPage`
+rasters and recognizes their text through a small, injectable
+:class:`OCREngine` abstraction (``ocr_page`` / ``ocr_pages``), returning a
+typed :class:`OCRResult` per page. The built-in :class:`TesseractEngine`
+wraps the external Tesseract executable through the optional ``ocr``
+dependencies; it performs **no** OCR cleanup and **no** structural
+reconstruction, and nothing routes scanned pages through OCR yet.
 """
 from .analyzer import (
     EmptyPDFError,
@@ -224,6 +232,18 @@ from .renderer import (
     render_pages,
 )
 
+# OCR processing API (Milestone 3.3)
+from .ocr import (
+    DEFAULT_OCR_LANGUAGE,
+    OCREngine,
+    OCRError,
+    OCREngineUnavailableError,
+    OCRResult,
+    TesseractEngine,
+    ocr_page,
+    ocr_pages,
+)
+
 __all__ = [
     "PDFAnalysis",
     "PDFAnalysisError",
@@ -369,4 +389,13 @@ __all__ = [
     "RenderedPage",
     "render_page",
     "render_pages",
+    # OCR processing (Milestone 3.3)
+    "DEFAULT_OCR_LANGUAGE",
+    "OCRResult",
+    "OCREngine",
+    "TesseractEngine",
+    "OCRError",
+    "OCREngineUnavailableError",
+    "ocr_page",
+    "ocr_pages",
 ]
