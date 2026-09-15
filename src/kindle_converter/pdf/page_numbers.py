@@ -514,6 +514,7 @@ def remove_page_numbers(
                 for element in page.elements
                 if id(element.paragraph) not in removed_ids
             ),
+            images=page.images,
         )
         for page in source.pages
     )

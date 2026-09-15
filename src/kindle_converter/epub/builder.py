@@ -175,7 +175,11 @@ def _build_epub_book(book: Book, language: str | None) -> epub.EpubBook:
         epub_book.add_item(item)
         chapters.append(item)
 
+    seen_resources: set[str] = set()
     for block, resource_name in images:
+        if resource_name in seen_resources:
+            continue
+        seen_resources.add(resource_name)
         epub_book.add_item(
             epub.EpubImage(
                 uid=resource_name,
@@ -227,9 +231,16 @@ def _render_chapter(
     Returns ``(xhtml_body, images)`` where ``images`` is the ordered list of
     ``(Image, resource_name)`` pairs referenced by the fragment. EbookLib
     wraps the fragment into a full XHTML document on write.
+
+    Images that carry a deterministic ``image-NNN`` asset token in their
+    ``alt_text`` (emitted by the M2.13 reconstruction) reuse one packaged
+    asset per token: repeated placements of the same extracted asset share a
+    single EPUB resource, while images without such a token keep the
+    historical per-block naming.
     """
     body_parts: list[str] = []
     images: list[tuple[Image, str]] = []
+    seen_asset_names: dict[str, str] = {}
     for image_index, block in enumerate(chapter.blocks):
         if isinstance(block, Paragraph):
             body_parts.append(_paragraph_html(block))
@@ -238,11 +249,15 @@ def _render_chapter(
         elif isinstance(block, PageBreak):
             body_parts.append(_pagebreak_html())
         elif isinstance(block, Image):
-            resource_name = _image_resource_name(
-                chapter_index, image_index, block
+            resource_name = _deduped_image_resource_name(
+                chapter_index, image_index, block, seen_asset_names
             )
             body_parts.append(_image_html(block, resource_name))
-            images.append((block, resource_name))
+            if not any(
+                existing is block and name == resource_name
+                for existing, name in images
+            ):
+                images.append((block, resource_name))
         else:
             raise EPUBGenerationError(
                 f"unsupported block type {type(block).__name__} in EPUB builder"
@@ -291,15 +306,7 @@ def _chapter_resource_name(chapter_index: int) -> str:
 def _image_resource_name(
     chapter_index: int, image_index: int, block: Image
 ) -> str:
-    """Deterministic, unique ``src`` name for an image resource.
-
-    Names are ``{prefix}-{chapter}-{index}.{ext}`` where ``prefix`` is the
-    first sanitized character of ``alt_text`` when available (``image``
-    otherwise). The chapter/image indices make the name unique even when two
-    images share an ``alt_text``. Resource files live flat in ``EPUB/`` next
-    to the chapter documents, which keeps the XHTML ``href`` values on the
-    same path level.
-    """
+    """Deterministic, unique ``src`` name for an image resource."""
     prefix = _sanitize(block.alt_text or "")[:1].lower()
     if not prefix or prefix.isdigit():
         prefix = "image"
@@ -307,6 +314,37 @@ def _image_resource_name(
         _resolve_content_type(block), "img"
     )
     return f"{prefix}-{chapter_index}-{image_index}.{extension}"
+
+
+def _deduped_image_resource_name(
+    chapter_index: int,
+    image_index: int,
+    block: Image,
+    seen_asset_names: dict[str, str],
+) -> str:
+    """Return the resource name for ``block``, reusing one per asset token."""
+    token = _extract_asset_token(block.alt_text or "")
+    if token is None:
+        return _image_resource_name(chapter_index, image_index, block)
+    existing = seen_asset_names.get(token)
+    if existing is not None:
+        return existing
+    extension = _CONTENT_TYPE_EXTENSIONS.get(
+        _resolve_content_type(block), "img"
+    )
+    name = f"{token}.{extension}"
+    seen_asset_names[token] = name
+    return name
+
+
+def _extract_asset_token(alt_text: str) -> str | None:
+    """Return the ``image-NNN`` asset token in ``alt_text``, if present."""
+    for word in re.split(r"\s+", alt_text.strip()):
+        core = word.strip().lower()
+        if re.fullmatch(r"image-\d+", core):
+            digits = core.split("-", 1)[1]
+            return f"image-{int(digits):03d}"
+    return None
 
 
 def _sanitize(text: str) -> str:

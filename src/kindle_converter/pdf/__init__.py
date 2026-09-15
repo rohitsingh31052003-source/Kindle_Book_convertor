@@ -154,11 +154,15 @@ from .header_footer import (
 from .reconstruction import (
     GENERIC_HEADING_LEVEL,
     ElementKind,
+    ReconstructedBodyElement,
     ReconstructedDocument,
     ReconstructedElement,
+    ReconstructedImage,
     ReconstructedPage,
     build_reconstructed_document,
+    ordered_body_elements,
     reconstruct_layout,
+    reconstructed_document_to_book,
 )
 
 # Chapter detection API (Milestone 2.9)
@@ -191,6 +195,15 @@ from .toc import (
 from .metadata import (
     extract_pdf_metadata,
     resolve_metadata,
+)
+
+# Image extraction and placement API (Milestone 2.13)
+from .images import (
+    ImageAsset,
+    ImageExtractionError,
+    ImageExtractionResult,
+    ImagePlacement,
+    extract_pdf_images,
 )
 
 __all__ = [
@@ -293,11 +306,15 @@ __all__ = [
     "ISOLATION_SCORE_WEIGHT",
     "PAGE_NUMBER_SCORE_WEIGHT",
     "ElementKind",
+    "ReconstructedBodyElement",
     "ReconstructedDocument",
     "ReconstructedElement",
+    "ReconstructedImage",
     "ReconstructedPage",
     "build_reconstructed_document",
+    "ordered_body_elements",
     "reconstruct_layout",
+    "reconstructed_document_to_book",
     "GENERIC_HEADING_LEVEL",
     # Chapter detection (Milestone 2.9)
     "ChapterDetectionResult",
@@ -319,4 +336,10 @@ __all__ = [
     # Metadata handling (Milestone 2.12)
     "extract_pdf_metadata",
     "resolve_metadata",
+    # Image extraction and placement (Milestone 2.13)
+    "ImageAsset",
+    "ImageExtractionError",
+    "ImageExtractionResult",
+    "ImagePlacement",
+    "extract_pdf_images",
 ]

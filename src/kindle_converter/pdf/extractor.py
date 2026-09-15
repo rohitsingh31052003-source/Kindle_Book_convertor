@@ -173,11 +173,17 @@ def _build_book(doc: pymupdf.Document) -> Book:
 
     The M2.7 integrated reconstruction (reading order, paragraphs,
     headings, header/footer filtering) produces the body content; page
-    boundaries map to ``PageBreak`` markers exactly as in M1.
+    boundaries map to ``PageBreak`` markers exactly as in M1. M2.13 image
+    extraction runs on the same open document (caller-owned, never closed
+    here) and its assets/placements are attached per page; text-only PDFs
+    yield an empty image result so text behavior is unchanged.
     """
     metadata = _build_metadata(doc)
     layout = deduplicate_layout(extract_page_layout(doc))
-    document, _, _, _ = reconstruct_layout(layout)
+    from .images import extract_pdf_images
+
+    images = extract_pdf_images(doc)
+    document, _, _, _ = reconstruct_layout(layout, images=images)
     return reconstructed_document_to_book(document, metadata)
 
 
