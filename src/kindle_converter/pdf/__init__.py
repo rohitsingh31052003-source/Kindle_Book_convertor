@@ -44,6 +44,7 @@ from .analyzer import (
     analyze_pdf,
     build_analysis,
     classify,
+    classify_pages,
 )
 from .extractor import (
     PDFExtractionError,
@@ -217,6 +218,7 @@ __all__ = [
     "analyze_pdf",
     "build_analysis",
     "classify",
+    "classify_pages",
     "PDFExtractionError",
     "ScannedPDFError",
     "MixedPDFError",

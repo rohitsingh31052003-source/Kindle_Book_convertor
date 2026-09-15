@@ -21,9 +21,11 @@ from kindle_converter.pdf import (
     classify,
 )
 from kindle_converter.pdf.analyzer import (
+    IMAGE_AREA_RATIO_THRESHOLD,
     MEANINGFUL_TEXT_CHAR_THRESHOLD,
     SCANNED_DOCUMENT_THRESHOLD,
     TEXT_DOCUMENT_THRESHOLD,
+    classify_pages,
 )
 
 # --------------------------------------------------------------------------- #
@@ -387,3 +389,354 @@ class TestResultShape:
         assert first.text_page_count == second.text_page_count
         assert first.image_page_count == second.image_page_count
         assert first.pages == second.pages
+
+
+# --------------------------------------------------------------------------- #
+# M3.1 - Page-level classification
+# --------------------------------------------------------------------------- #
+
+
+class TestPageLevelClassification:
+    """M3.1: Page-level TEXT / SCANNED / MIXED classification.
+
+    All PDFs are generated on the fly with PyMuPDF; nothing here
+    requires internet access or external fixture files.
+    """
+
+    def test_normal_text_page_is_text(self, tmp_path) -> None:
+        path = make_text_pdf(tmp_path / "text.pdf")
+        analysis = analyze_pdf(path)
+        for page in analysis.pages:
+            assert page.classification is PDFType.TEXT
+
+    def test_multiple_text_blocks_still_text(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        for i in range(5):
+            page.insert_text(
+                (72, 100 + i * 45),
+                "This is a substantial body text line for testing.",
+            )
+        path = _save(doc, tmp_path / "multi_block.pdf")
+        analysis = analyze_pdf(path)
+        assert len(analysis.pages) == 1
+        assert analysis.pages[0].classification is PDFType.TEXT
+        assert analysis.pages[0].text_block_count >= 1
+
+    def test_short_trivial_text_is_not_meaningful(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        page.insert_text((72, 100), "Hi")
+        path = _save(doc, tmp_path / "trivial.pdf")
+        analysis = analyze_pdf(path)
+        assert analysis.pages[0].classification is PDFType.SCANNED
+        assert not analysis.pages[0].has_meaningful_text
+
+    def test_full_page_image_is_scanned(self, tmp_path) -> None:
+        path = make_scanned_pdf(tmp_path / "scanned.pdf")
+        analysis = analyze_pdf(path)
+        for page in analysis.pages:
+            assert page.classification is PDFType.SCANNED
+            assert page.image_count >= 1
+            # make_scanned_pdf uses a 400x300 image on 595x842 page
+            # (~0.24 area ratio). The page is SCANNED because it has
+            # no meaningful text, regardless of image coverage.
+            assert page.image_area_ratio < IMAGE_AREA_RATIO_THRESHOLD or (
+                page.has_meaningful_text is False
+                and page.classification is PDFType.SCANNED
+            )
+
+    def test_scanned_with_trivial_text_is_still_scanned(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        page.insert_text((72, 100), "Page 1")
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 400, 300))
+        page.insert_image(pymupdf.Rect(50, 100, 545, 780), pixmap=pixmap)
+        path = _save(doc, tmp_path / "scanned_trivial.pdf")
+        analysis = analyze_pdf(path)
+        assert analysis.pages[0].classification is PDFType.SCANNED
+
+    def test_meaningful_text_plus_substantial_image_is_mixed(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        _insert_text_lines(page, [TEXT_LINE] * 4)
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 500, 700))
+        page.insert_image(pymupdf.Rect(20, 50, 520, 750), pixmap=pixmap)
+        path = _save(doc, tmp_path / "mixed_large.pdf")
+        analysis = analyze_pdf(path)
+        assert analysis.pages[0].classification is PDFType.MIXED
+        assert analysis.pages[0].has_meaningful_text
+        assert analysis.pages[0].image_area_ratio >= IMAGE_AREA_RATIO_THRESHOLD
+
+    def test_meaningful_text_plus_tiny_image_is_text(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        _insert_text_lines(page, [TEXT_LINE] * 4)
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 50, 50))
+        page.insert_image(pymupdf.Rect(50, 50, 100, 100), pixmap=pixmap)
+        path = _save(doc, tmp_path / "mixed_tiny.pdf")
+        analysis = analyze_pdf(path)
+        assert analysis.pages[0].classification is PDFType.TEXT
+        assert analysis.pages[0].image_count == 1
+        assert analysis.pages[0].image_area_ratio < IMAGE_AREA_RATIO_THRESHOLD
+
+    def test_multiple_images_with_coverage_is_mixed(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        _insert_text_lines(page, [TEXT_LINE] * 4)
+        # Two images that together cover > 50% of the page.
+        # Image 1: 300x400 = 120000, Image 2: 300x400 = 120000
+        # Total: 240000 / 500990 ~ 0.48 (close, but let's use bigger)
+        # Image 1: 400x400 = 160000, Image 2: 400x400 = 160000
+        # Total: 320000 / 500990 ~ 0.64 > 0.5
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 400, 400))
+        page.insert_image(pymupdf.Rect(50, 50, 450, 450), pixmap=pixmap)
+        pixmap2 = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 400, 400))
+        page.insert_image(pymupdf.Rect(150, 450, 545, 780), pixmap=pixmap2)
+        path = _save(doc, tmp_path / "multi_image.pdf")
+        analysis = analyze_pdf(path)
+        page_analysis = analysis.pages[0]
+        assert page_analysis.image_count == 2
+        assert page_analysis.image_area_ratio >= IMAGE_AREA_RATIO_THRESHOLD
+        assert page_analysis.classification is PDFType.MIXED
+
+    def test_image_smaller_than_page_is_not_auto_mixed(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        _insert_text_lines(page, [TEXT_LINE] * 4)
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 100, 100))
+        page.insert_image(pymupdf.Rect(50, 50, 150, 150), pixmap=pixmap)
+        path = _save(doc, tmp_path / "small_image.pdf")
+        analysis = analyze_pdf(path)
+        assert analysis.pages[0].classification is PDFType.TEXT
+
+    def test_no_images_no_meaningful_text_is_scanned(self, tmp_path) -> None:
+        # A page with no text and no images is classified SCANNED
+        # at the page level. At the document level, analyze_pdf raises
+        # NoContentError because the document has no content anywhere.
+        from kindle_converter.pdf.analyzer import NoContentError
+        from kindle_converter.pdf.analyzer import _classify_page
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        path = _save(doc, tmp_path / "empty_content.pdf")
+        with pytest.raises(NoContentError):
+            analyze_pdf(path)
+        # Verify the classification logic directly
+        assert _classify_page(False, 0.0) is PDFType.SCANNED
+        assert _classify_page(False, 0.5) is PDFType.SCANNED
+        assert _classify_page(False, 1.0) is PDFType.SCANNED
+
+    def test_whitespace_only_page_is_scanned(self, tmp_path) -> None:
+        # A page with only whitespace has no meaningful text and is
+        # classified SCANNED at the page level. At the document level,
+        # analyze_pdf raises NoContentError because whitespace-only
+        # text has char_count=0 and no images.
+        from kindle_converter.pdf.analyzer import NoContentError
+        from kindle_converter.pdf.analyzer import _classify_page
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        page.insert_text((72, 100), "     ")
+        path = _save(doc, tmp_path / "whitespace.pdf")
+        with pytest.raises(NoContentError):
+            analyze_pdf(path)
+        # Verify the classification logic directly
+        assert _classify_page(False, 0.0) is PDFType.SCANNED
+        assert _classify_page(False, 0.3) is PDFType.SCANNED
+
+    def test_unusual_page_dimensions(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = doc.new_page(width=1000, height=500)
+        page.insert_text((50, 100), TEXT_LINE)
+        path = _save(doc, tmp_path / "wide.pdf")
+        analysis = analyze_pdf(path)
+        assert analysis.pages[0].classification is PDFType.TEXT
+
+    def test_page_classification_fields_present(self, tmp_path) -> None:
+        path = make_text_pdf(tmp_path / "fields.pdf")
+        analysis = analyze_pdf(path)
+        for page in analysis.pages:
+            assert isinstance(page.text_block_count, int)
+            assert isinstance(page.image_count, int)
+            assert isinstance(page.image_area_ratio, float)
+            assert isinstance(page.classification, PDFType)
+
+    def test_image_area_ratio_computed_from_geometry(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 297, 842))
+        page.insert_image(pymupdf.Rect(0, 0, 297, 842), pixmap=pixmap)
+        path = _save(doc, tmp_path / "half_image.pdf")
+        analysis = analyze_pdf(path)
+        page_analysis = analysis.pages[0]
+        assert page_analysis.image_count == 1
+        assert abs(page_analysis.image_area_ratio - 0.5) < 0.02
+        assert page_analysis.classification is PDFType.SCANNED
+
+    def test_classification_is_deterministic(self, tmp_path) -> None:
+        path = make_scanned_pdf(tmp_path / "det.pdf")
+        first = analyze_pdf(path)
+        second = analyze_pdf(path)
+        for f, s in zip(first.pages, second.pages):
+            assert f.classification is s.classification
+            assert f.image_area_ratio == s.image_area_ratio
+            assert f.image_count == s.image_count
+            assert f.text_block_count == s.text_block_count
+
+
+# --------------------------------------------------------------------------- #
+# M3.1 - Document-level classification from pages
+# --------------------------------------------------------------------------- #
+
+
+class TestDocumentClassificationFromPages:
+    """M3.1: Document-level classification derived from page classifications."""
+
+    def test_all_text_pages_is_text(self, tmp_path) -> None:
+        path = make_text_pdf(tmp_path / "all_text.pdf", pages=3)
+        analysis = analyze_pdf(path)
+        doc_type = classify_pages(analysis.pages)
+        assert doc_type is PDFType.TEXT
+
+    def test_all_scanned_pages_is_scanned(self, tmp_path) -> None:
+        path = make_scanned_pdf(tmp_path / "all_scanned.pdf", pages=3)
+        analysis = analyze_pdf(path)
+        doc_type = classify_pages(analysis.pages)
+        assert doc_type is PDFType.SCANNED
+
+    def test_text_plus_scanned_is_mixed(self, tmp_path) -> None:
+        path = make_mixed_pdf(tmp_path / "text_scanned.pdf", text_pages=3, image_pages=2)
+        analysis = analyze_pdf(path)
+        doc_type = classify_pages(analysis.pages)
+        assert doc_type is PDFType.MIXED
+
+    def test_text_plus_mixed_is_mixed(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        _insert_text_lines(page, [TEXT_LINE] * 6)
+        page2 = _new_page(doc)
+        _insert_text_lines(page2, [TEXT_LINE] * 4)
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 500, 700))
+        page2.insert_image(pymupdf.Rect(20, 50, 520, 750), pixmap=pixmap)
+        path = _save(doc, tmp_path / "text_mixed.pdf")
+        analysis = analyze_pdf(path)
+        doc_type = classify_pages(analysis.pages)
+        assert doc_type is PDFType.MIXED
+
+    def test_scanned_plus_mixed_is_mixed(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 400, 300))
+        page.insert_image(pymupdf.Rect(50, 100, 545, 780), pixmap=pixmap)
+        page2 = _new_page(doc)
+        _insert_text_lines(page2, [TEXT_LINE] * 4)
+        pixmap2 = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 500, 700))
+        page2.insert_image(pymupdf.Rect(20, 50, 520, 750), pixmap=pixmap2)
+        path = _save(doc, tmp_path / "scanned_mixed.pdf")
+        analysis = analyze_pdf(path)
+        doc_type = classify_pages(analysis.pages)
+        assert doc_type is PDFType.MIXED
+
+    def test_classify_pages_empty_raises(self) -> None:
+        with pytest.raises(ValueError):
+            classify_pages([])
+
+    def test_classify_pages_matches_analyzer_for_uniform(self, tmp_path) -> None:
+        for maker, name in [
+            (lambda p: make_text_pdf(tmp_path / name, pages=p), "text"),
+            (lambda p: make_scanned_pdf(tmp_path / name, pages=p), "scanned"),
+        ]:
+            for pages in [1, 3, 5]:
+                path = maker(pages)
+                analysis = analyze_pdf(path)
+                assert classify_pages(analysis.pages) is analysis.document_type
+
+    def test_classify_pages_is_deterministic(self, tmp_path) -> None:
+        path = make_mixed_pdf(tmp_path / "det.pdf", text_pages=2, image_pages=2)
+        analysis = analyze_pdf(path)
+        first = classify_pages(analysis.pages)
+        second = classify_pages(analysis.pages)
+        assert first is second
+
+
+# --------------------------------------------------------------------------- #
+# M3.1 - Threshold boundary tests
+# --------------------------------------------------------------------------- #
+
+
+class TestImageAreaRatioThreshold:
+    """Test behavior at the IMAGE_AREA_RATIO_THRESHOLD boundary."""
+
+    def test_image_below_threshold_is_text(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        _insert_text_lines(page, [TEXT_LINE] * 4)
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 200, 300))
+        page.insert_image(pymupdf.Rect(50, 50, 250, 350), pixmap=pixmap)
+        path = _save(doc, tmp_path / "below.pdf")
+        analysis = analyze_pdf(path)
+        assert analysis.pages[0].image_area_ratio < IMAGE_AREA_RATIO_THRESHOLD
+        assert analysis.pages[0].classification is PDFType.TEXT
+
+    def test_image_at_threshold_with_text_is_mixed(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        _insert_text_lines(page, [TEXT_LINE] * 4)
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 500, 700))
+        page.insert_image(pymupdf.Rect(20, 50, 520, 750), pixmap=pixmap)
+        path = _save(doc, tmp_path / "at_threshold.pdf")
+        analysis = analyze_pdf(path)
+        assert analysis.pages[0].image_area_ratio >= IMAGE_AREA_RATIO_THRESHOLD
+        assert analysis.pages[0].classification is PDFType.MIXED
+
+    def test_image_at_threshold_without_text_is_scanned(self, tmp_path) -> None:
+        doc = pymupdf.open()
+        page = _new_page(doc)
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 500, 700))
+        page.insert_image(pymupdf.Rect(20, 50, 520, 750), pixmap=pixmap)
+        path = _save(doc, tmp_path / "scan_at_threshold.pdf")
+        analysis = analyze_pdf(path)
+        assert analysis.pages[0].image_area_ratio >= IMAGE_AREA_RATIO_THRESHOLD
+        assert analysis.pages[0].classification is PDFType.SCANNED
+
+    def test_threshold_is_accessible_from_public_api(self) -> None:
+        from kindle_converter.pdf.analyzer import IMAGE_AREA_RATIO_THRESHOLD
+        assert isinstance(IMAGE_AREA_RATIO_THRESHOLD, float)
+        assert 0.0 < IMAGE_AREA_RATIO_THRESHOLD < 1.0
+
+
+# --------------------------------------------------------------------------- #
+# M3.1 - Public API verification
+# --------------------------------------------------------------------------- #
+
+
+class TestM31PublicAPI:
+    def test_classify_pages_is_exported(self) -> None:
+        from kindle_converter.pdf import classify_pages
+        assert callable(classify_pages)
+
+    def test_page_analysis_has_classification_field(self) -> None:
+        from kindle_converter.pdf.models import PageAnalysis, PDFType
+        row = PageAnalysis(
+            page_number=1,
+            has_image=False,
+            has_meaningful_text=True,
+            char_count=50,
+            text="hello",
+        )
+        assert row.classification is PDFType.TEXT
+        assert isinstance(row.text_block_count, int)
+        assert isinstance(row.image_count, int)
+        assert isinstance(row.image_area_ratio, float)
+
+    def test_new_fields_have_sensible_defaults(self) -> None:
+        from kindle_converter.pdf.models import PageAnalysis
+        row = PageAnalysis(
+            page_number=1,
+            has_image=False,
+            has_meaningful_text=False,
+            char_count=0,
+        )
+        assert row.text_block_count == 0
+        assert row.image_count == 0
+        assert row.image_area_ratio == 0.0
+        assert row.classification is PDFType.TEXT

@@ -44,6 +44,15 @@ TEXT_DOCUMENT_THRESHOLD = 0.8
 #: classified as ``PDFType.SCANNED``. Fractions in between are ``MIXED``.
 SCANNED_DOCUMENT_THRESHOLD = 0.2
 
+#: The fraction of the page area that must be covered by images for the
+#: page to be considered image-dominated. A page whose images cover at
+#: least this much of the page rectangle is classified as SCANNED (no
+#: meaningful text) or MIXED (meaningful text present). Images smaller
+#: than this fraction -- for example a decorative illustration on a
+#: text page -- do not change the page's classification.
+#: Measured as total image bbox area divided by page area.
+IMAGE_AREA_RATIO_THRESHOLD = 0.5
+
 # --------------------------------------------------------------------------- #
 # Exceptions
 # --------------------------------------------------------------------------- #
@@ -289,13 +298,153 @@ def _analyze_page(page: pymupdf.Page, *, index: int) -> PageAnalysis:
         longest >= MEANINGFUL_TEXT_CHAR_THRESHOLD
         and not _all_lines_in_bands(page, lines)
     )
+    text_block_count = _count_text_blocks(page)
+    image_count, image_area_ratio = _image_coverage(page)
+    classification = _classify_page(meaningful, image_area_ratio)
     return PageAnalysis(
         page_number=index + 1,
         has_image=_has_image(page),
         has_meaningful_text=meaningful,
         char_count=longest,
         text=raw if index == 0 else "",
+        text_block_count=text_block_count,
+        image_count=image_count,
+        image_area_ratio=image_area_ratio,
+        classification=classification,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Page classification helpers
+# --------------------------------------------------------------------------- #
+
+
+def _classify_page(
+    has_meaningful_text: bool, image_area_ratio: float
+) -> PDFType:
+    """Classify a single page from meaningful-text and image coverage.
+
+    The classification is deterministic and OCR-independent:
+
+    * **TEXT** -- the page has meaningful native text and images do
+      not cover at least ``IMAGE_AREA_RATIO_THRESHOLD`` of the page.
+      A page with real prose plus a small illustration stays TEXT.
+
+    * **SCANNED** -- the page has no meaningful native text and is
+      image-dominated (images cover at least
+      ``IMAGE_AREA_RATIO_THRESHOLD`` of the page), or the page has
+      no meaningful text regardless of image coverage. An empty page,
+      a page with only whitespace, or a page with only trivial
+      fragments (below the meaningful-text threshold) all classify as
+      SCANNED. Empty pages are explicitly classified SCANNED rather
+      than left unclassified: they carry no extractable text and no
+      meaningful content, so they belong in the non-text category.
+
+    * **MIXED** -- the page has meaningful native text *and* images
+      cover at least ``IMAGE_AREA_RATIO_THRESHOLD`` of the page.
+
+    Parameters
+    ----------
+    has_meaningful_text:
+        Whether the page contains meaningful native text
+        (per the existing meaningful-text heuristic).
+    image_area_ratio:
+        Fraction of the page rectangle covered by images (0.0-1.0).
+
+    Returns
+    -------
+    PDFType
+        The page-level classification.
+    """
+    if has_meaningful_text and image_area_ratio < IMAGE_AREA_RATIO_THRESHOLD:
+        return PDFType.TEXT
+    if has_meaningful_text and image_area_ratio >= IMAGE_AREA_RATIO_THRESHOLD:
+        return PDFType.MIXED
+    return PDFType.SCANNED
+
+
+def classify_pages(pages: Iterable[PageAnalysis]) -> PDFType:
+    """Derive a document-level classification from per-page classifications.
+
+    This is the document-level classification derived deterministically
+    from page-level classifications, as required by M3.1. It complements
+    :func:`classify` (which derives from the fraction of pages with
+    meaningful text) and is available for later milestones that need
+    page-classification-based routing.
+
+    The aggregation rules:
+
+    * All pages TEXT  -> ``PDFType.TEXT``
+    * All pages SCANNED -> ``PDFType.SCANNED``
+    * Any MIXED pages, or a mix of TEXT and SCANNED -> ``PDFType.MIXED``
+
+    Parameters
+    ----------
+    pages:
+        Per-page analysis rows in page order. Each row's
+        ``classification`` field is used.
+
+    Returns
+    -------
+    PDFType
+        The document-level classification derived from page
+        classifications.
+
+    Raises
+    ------
+    ValueError
+        If ``pages`` is empty.
+    """
+    rows = list(pages)
+    if not rows:
+        raise ValueError("classify_pages requires at least one page")
+    classifications = {r.classification for r in rows}
+    if classifications == {PDFType.TEXT}:
+        return PDFType.TEXT
+    if classifications == {PDFType.SCANNED}:
+        return PDFType.SCANNED
+    return PDFType.MIXED
+
+
+def _count_text_blocks(page: pymupdf.Page) -> int:
+    """Return the number of text blocks (type 0) on ``page``."""
+    return sum(
+        1 for block in page.get_text("dict")["blocks"] if block.get("type") == 0
+    )
+
+
+def _image_coverage(
+    page: pymupdf.Page,
+) -> tuple[int, float]:
+    """Return ``(image_count, image_area_ratio)`` for ``page``.
+
+    ``image_count`` is the number of image placements from
+    ``page.get_image_info()``.
+
+    ``image_area_ratio`` is the total area of all image bounding boxes
+    divided by the page area. Overlapping image rects are counted
+    separately (their areas sum), which is a conservative upper bound
+    on actual covered area. A page with no images returns ``(0, 0.0)``.
+    Pages with a non-positive height return ``(0, 0.0)`` to avoid
+    division by zero.
+    """
+    infos = page.get_image_info()
+    if not infos:
+        return 0, 0.0
+    page_area = page.rect.width * page.rect.height
+    if page_area <= 0:
+        return len(infos), 0.0
+    total_image_area = 0.0
+    for info in infos:
+        bbox = info.get("bbox")
+        if bbox and len(bbox) == 4:
+            x0, y0, x1, y1 = (float(v) for v in bbox)
+            total_image_area += max(0.0, x1 - x0) * max(0.0, y1 - y0)
+    ratio = total_image_area / page_area
+    # Clamp to [0.0, 1.0] to guard against overlapping rects or
+    # floating-point edge cases.
+    ratio = min(1.0, max(0.0, ratio))
+    return len(infos), ratio
 
 
 # --------------------------------------------------------------------------- #

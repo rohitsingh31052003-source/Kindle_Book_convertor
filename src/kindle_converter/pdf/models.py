@@ -48,6 +48,25 @@ class PageAnalysis:
     document only; on every other page it is the empty string (see
     :class:`PDFAnalysis`). Consumers must not assume raw text is present
     on every page.
+
+    ``text_block_count`` is the number of distinct text blocks on the
+    page (blocks of type 0 from PyMuPDF ``"dict"`` layout). It provides
+    evidence for why a page was classified a certain way without relying
+    on OCR.
+
+    ``image_count`` is the number of embedded image placements on the
+    page, obtained from ``page.get_image_info()``.
+
+    ``image_area_ratio`` is the fraction of the page rectangle covered
+    by image placements (total image bbox area divided by page area).
+    It is a deterministic geometric measure used to decide whether a page
+    is image-dominated. 0.0 means no images; 1.0 means images cover the
+    entire page.
+
+    ``classification`` is the page-level content classification
+    (``PDFType.TEXT``, ``PDFType.SCANNED``, or ``PDFType.MIXED``) derived
+    from meaningful-text presence and image coverage. It is independent
+    of OCR and depends only on PDF-native information.
     """
 
     page_number: int
@@ -55,6 +74,10 @@ class PageAnalysis:
     has_meaningful_text: bool
     char_count: int
     text: str = ""
+    text_block_count: int = 0
+    image_count: int = 0
+    image_area_ratio: float = 0.0
+    classification: PDFType = PDFType.TEXT
 
 
 @dataclass(slots=True)
