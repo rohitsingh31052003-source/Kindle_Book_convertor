@@ -344,22 +344,22 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 * [x] Initialize Python project
 * [x] Establish package structure
 * [x] Add automated tests
-* [ ] Create document domain model
-* [ ] Implement PDF type analysis
-* [ ] Implement basic text extraction
-* [ ] Implement initial EPUB generation
-* [ ] Create an end-to-end PDF → EPUB pipeline
+* [x] Create document domain model
+* [x] Implement PDF type analysis
+* [x] Implement basic text extraction
+* [x] Implement initial EPUB generation
+* [x] Create an end-to-end PDF → EPUB pipeline
 
 ### Milestone 2 — Book Reconstruction
 
-* [ ] Chapter detection
+* [x] Chapter detection
 * [x] Heading detection (M2.4 — layout-based, conservative, deterministic)
 * [x] Paragraph reconstruction (M2.3)
-* [ ] Header/footer removal
-* [ ] Page-number removal
-* [ ] Table of contents generation
-* [ ] Metadata handling
-* [ ] Image extraction and placement
+* [x] Header/footer removal
+* [x] Page-number removal
+* [x] Table of contents generation
+* [x] Metadata handling
+* [x] Image extraction and placement
 
 ### Milestone 3 — Scanned PDFs and OCR
 
@@ -368,7 +368,7 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 * [x] OCR processing
 * [x] OCR cleanup (M3.4 — conservative, deterministic; no recognition correction)
 * [x] Mixed text/image document handling (M3.5 — deterministic per-page OCR routing)
-* [ ] Improve structural reconstruction
+* [x] Improve structural reconstruction
 
 ### Milestone 4 — Kindle Output
 
