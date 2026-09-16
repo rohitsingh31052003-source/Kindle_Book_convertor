@@ -1,28 +1,30 @@
-"""End-to-end PDF -> EPUB / Book conversion pipeline (Milestones 1.5 + 3.6).
+"""End-to-end PDF -> Book -> EPUB conversion pipeline (Milestones 1.5 + 4.1).
 
 This module is the thin orchestration boundary that wires the existing
-milestone components together:
+milestone components together. Since M4.1 there is exactly **one** output
+path for every kind of PDF, and it always goes through the format-independent
+document model::
 
-    PDF -> analyze_pdf -> extract_book -> build_epub -> EPUB
-    PDF -> analyze_pdf -> process_pages -> reconstruct_processed_pages
-        -> reconstructed_document_to_book -> Book   (M3.6, OCR-aware)
+    PDF -> convert_pdf_to_book -> Book -> build_epub -> EPUB
 
-It contains **no** PDF parsing, text extraction, or EPUB generation logic
-of its own; each stage delegates to the existing public API:
+``convert_pdf_to_book`` (M3.6) accepts every classification: TEXT pages use
+the native M2 reconstruction, SCANNED pages are rendered, OCR'd, and cleaned
+(M3.2-M3.4), and MIXED pages keep native and OCR text separate (M3.5).
+``convert_pdf_to_epub`` (M4.1) therefore converts text, scanned, and mixed
+PDFs alike; it is plain composition and contains **no** PDF parsing, text
+extraction, OCR, or EPUB generation logic of its own. Each stage delegates to
+the existing public API:
 
 * :func:`kindle_converter.pdf.analyze_pdf` -- first-pass classification,
-* :func:`kindle_converter.pdf.extract_book` -- document-model extraction,
+* :func:`kindle_converter.pdf.processing.process_pages` -- per-page routing
+  (native text and/or OCR),
+* :func:`kindle_converter.pdf.structural.reconstruct_processed_pages` --
+  OCR-aware structural reconstruction into the document model,
 * :func:`kindle_converter.epub.build_epub` -- EPUB rendering.
 
-The original EPUB pipeline's only added responsibility is an explicit
-supported-input decision: it uses the analysis result to refuse scanned and
-mixed PDFs by raising the extractor's own exceptions before extraction runs.
-
-``convert_pdf_to_book`` (M3.6) additionally accepts scanned and mixed PDFs:
-it routes every page through the M3.5 processing layer (native text for
-TEXT pages, OCR for SCANNED pages, both kept separate for MIXED pages) and
-feeds the results into an OCR-aware structural reconstruction that reuses
-the M2 stack for native text and adds OCR-derived body paragraphs.
+The EPUB layer only ever sees a ``Book``: no PDF, OCR, routing, or
+reconstruction type crosses that boundary, and no PDF/OCR-specific logic
+lives in the EPUB modules.
 """
 
 from __future__ import annotations
@@ -33,16 +35,9 @@ import pymupdf
 
 from .document import Book
 from .epub import build_epub
-from .pdf import (
-    MixedPDFError,
-    PDFReadError,
-    ScannedPDFError,
-    analyze_pdf,
-    extract_book,
-)
+from .pdf import PDFReadError, analyze_pdf, extract_pdf_images
 from .pdf.layout import extract_page_layout
 from .pdf.metadata import extract_pdf_metadata
-from .pdf.models import PDFAnalysis, PDFType
 from .pdf.ocr import OCREngine
 from .pdf.processing import PageRenderer, process_pages
 from .pdf.reconstruction import (
@@ -59,20 +54,39 @@ Source = str | os.PathLike[str] | pymupdf.Document
 class PipelineError(Exception):
     """Base class for PDF-to-EPUB pipeline failures.
 
-    This exists to give the pipeline its own error boundary. The current
-    pipeline has no failures of its own: every failure is a domain error
-    from an existing stage (:class:`PDFReadError`, :class:`EmptyPDFError`,
-    :class:`NoContentError`, :class:`ScannedPDFError`,
-    :class:`MixedPDFError`, :class:`EPUBGenerationError`, or a filesystem
-    ``OSError``) and those exceptions are deliberately propagated
-    unchanged so callers can react to the underlying cause. Future
-    pipeline-level errors -- those about orchestration rather than a
-    single stage -- should subclass this.
+    This exists to give the pipeline its own error boundary. The pipeline
+    has no failures of its own: every failure is a domain error from an
+    existing stage (:class:`PDFReadError`, :class:`EmptyPDFError`,
+    :class:`NoContentError`, the M3.2 ``PDFRenderingError``, the M3.3
+    ``OCRError`` (including ``OCREngineUnavailableError``),
+    :class:`EPUBGenerationError`, or a filesystem ``OSError``) and those
+    exceptions are deliberately propagated unchanged so callers can react
+    to the underlying cause. Future pipeline-level errors -- those about
+    orchestration rather than a single stage -- should subclass this.
     """
 
 
-def convert_pdf_to_epub(source: Source, output: PathLike) -> None:
-    """Convert a text-based PDF into an EPUB and write it to ``output``.
+def convert_pdf_to_epub(
+    source: Source,
+    output: PathLike,
+    *,
+    engine: OCREngine | None = None,
+    renderer: PageRenderer | None = None,
+    dpi: int | float = DEFAULT_RENDER_DPI,
+) -> None:
+    """Convert any PDF into a reflowable EPUB and write it to ``output``.
+
+    Milestone 4.1 makes EPUB generation the production output path for every
+    PDF classification, through the single unified pipeline::
+
+        book = convert_pdf_to_book(source, engine=...)
+        build_epub(book, output)
+
+    TEXT, SCANNED, and MIXED documents all produce a
+    :class:`~kindle_converter.document.models.Book` first; the EPUB layer
+    renders that book and never inspects the PDF. Scanned and mixed
+    documents are routed through the M3 OCR-aware processing path, so no OCR
+    or reconstruction logic exists on the output side.
 
     Parameters
     ----------
@@ -86,6 +100,18 @@ def convert_pdf_to_epub(source: Source, output: PathLike) -> None:
         where the ``.epub`` file is written. Parent directories must
         already exist; they are not created. An existing file is
         overwritten.
+    engine:
+        Optional :class:`~kindle_converter.pdf.ocr.OCREngine` used for every
+        page that needs OCR. When ``None`` (default), Tesseract is used
+        *lazily*: the built-in engine is only constructed for the first
+        SCANNED/MIXED page that actually needs recognition, so text-only
+        PDFs never touch the optional ``ocr`` dependencies.
+    renderer:
+        Optional :class:`~kindle_converter.pdf.processing.PageRenderer`;
+        defaults to the M3.2 :func:`render_page`. Injectable for
+        deterministic rendering tests.
+    dpi:
+        Rendering resolution for OCR pages (validated eagerly).
 
     Returns
     -------
@@ -99,12 +125,13 @@ def convert_pdf_to_epub(source: Source, output: PathLike) -> None:
         If the PDF opens but has zero pages.
     NoContentError
         If every page is both text-free and image-free.
-    ScannedPDFError
-        If the document is classified ``PDFType.SCANNED``; OCR is not yet
-        implemented.
-    MixedPDFError
-        If the document is classified ``PDFType.MIXED``; the pipeline
-        refuses hidden partial conversion.
+    TypeError
+        If ``engine`` does not provide ``recognize(image)`` or ``renderer``
+        is not callable (validated by the M3.5 routing layer before any page
+        runs).
+    OCRError (including ``OCREngineUnavailableError``)
+        If OCR fails on a page that needs it (for example when the optional
+        OCR dependencies or the Tesseract executable are missing).
     EPUBGenerationError
         If the extracted book cannot be rendered as an EPUB.
     OSError
@@ -114,10 +141,11 @@ def convert_pdf_to_epub(source: Source, output: PathLike) -> None:
     Examples
     --------
     >>> convert_pdf_to_epub("book.pdf", "book.epub")
+    >>> convert_pdf_to_epub("scan.pdf", "scan.epub", engine=TesseractEngine())
     """
-    analysis = analyze_pdf(source)
-    _require_supported(analysis)
-    book = extract_book(source)
+    book = convert_pdf_to_book(
+        source, _resolve_engine(engine), renderer=renderer, dpi=dpi
+    )
     build_epub(book, output)
 
 
@@ -130,8 +158,9 @@ def convert_pdf_to_book(
 ) -> Book:
     """Convert a PDF into a document-model ``Book``, OCR-aware (Milestone 3.6).
 
-    Unlike :func:`convert_pdf_to_epub` (which refuses scanned and mixed
-    PDFs until M4), this entry point handles **all** classifications:
+    This entry point handles **all** classifications, and is the source of
+    every ``Book`` the EPUB layer renders (including from
+    :func:`convert_pdf_to_epub`):
 
     * ``TEXT`` pages use native extraction and the full M2 structural
       reconstruction (byte-identical to :func:`extract_book`).
@@ -142,7 +171,8 @@ def convert_pdf_to_book(
       paragraphs, never concatenated or de-duplicated.
 
     The PDF is opened once and shared by analysis, native layout extraction,
-    and any rendering. OCR runs through the injected ``engine`` exactly like
+    image extraction, and any rendering. OCR runs through the injected
+    ``engine`` exactly like
     :func:`~kindle_converter.pdf.process_pages`; no hidden engine is ever
     created, so this function is testable without Tesseract.
 
@@ -166,8 +196,9 @@ def convert_pdf_to_book(
     -------
     Book
         A document-model book: one chapter, ``PageBreak`` per page boundary,
-        native headings at the generic heading level, and OCR-derived body
-        paragraphs for scanned/mixed pages.
+        native headings at the generic heading level, OCR-derived body
+        paragraphs for scanned/mixed pages, and the PDF's embedded images
+        (M2.13) at their reconstructed document positions.
 
     Raises
     ------
@@ -194,6 +225,10 @@ def convert_pdf_to_book(
     try:
         analysis = analyze_pdf(doc)
         layout = deduplicate_layout(extract_page_layout(doc))
+        # M2.13: embedded images ride along with the reconstructed text so the
+        # unified Book keeps them for every classification (the EPUB layer
+        # only renders the images it receives).
+        images = extract_pdf_images(doc)
         results = process_pages(
             doc,
             analysis,
@@ -202,7 +237,9 @@ def convert_pdf_to_book(
             dpi=dpi,
             layout=layout,
         )
-        document = reconstruct_processed_pages(results, layout=layout)
+        document = reconstruct_processed_pages(
+            results, layout=layout, images=images
+        )
         metadata = extract_pdf_metadata(doc)
         return reconstructed_document_to_book(document, metadata)
     finally:
@@ -232,24 +269,45 @@ def _close_if_owned(source: Source, doc: pymupdf.Document) -> None:
             pass
 
 
-def _require_supported(analysis: PDFAnalysis) -> None:
-    """Reject currently unsupported PDFs, using the analysis result.
+def _resolve_engine(engine: OCREngine | None) -> OCREngine:
+    """Return the OCR engine to use, defaulting to a deferred Tesseract.
 
-    The classification from :func:`analyze_pdf` drives the pipeline's
-    supported-input decision explicitly rather than being re-derived: a
-    ``SCANNED`` document cannot be converted without OCR, and a ``MIXED``
-    document would otherwise be silently converted only in part. Both
-    failures are raised with the exact exceptions the extraction stage
-    already defines so callers can catch a single, existing exception
-    class.
+    The M3.5 routing layer validates the engine eagerly, so
+    :func:`convert_pdf_to_epub` must hand *something* with a
+    ``recognize(image)`` method to :func:`convert_pdf_to_book` even for a
+    text-only PDF that never calls it. An injected engine is returned
+    unchanged; ``None`` defers to Tesseract only for documents that actually
+    need OCR.
     """
-    if analysis.document_type is PDFType.SCANNED:
-        raise ScannedPDFError(
-            "The PDF is SCANNED (image-only), but OCR is not implemented "
-            "yet; cannot convert it to EPUB."
-        )
-    if analysis.document_type is PDFType.MIXED:
-        raise MixedPDFError(
-            "The PDF is MIXED (part text, part images); refusing to "
-            "convert only part of it. Mixed handling is a later milestone."
-        )
+    if engine is not None:
+        return engine
+    return _DeferredTesseractEngine()
+
+
+class _DeferredTesseractEngine:
+    """``OCREngine`` that constructs :class:`TesseractEngine` on first use.
+
+    The Tesseract Python wrappers (``pytesseract``/``Pillow``) are an
+    optional dependency (the ``ocr`` extra) and the Tesseract executable is
+    an external runtime requirement that this project never installs.
+    Constructing the built-in engine eagerly would therefore make plain text
+    conversion depend on the OCR stack; deferring the construction keeps
+    ``TEXT -> EPUB`` working in a base installation while letting SCANNED and
+    MIXED documents run real OCR when Tesseract is available. When it is not
+    available, the first page that needs recognition raises the M3.3
+    :class:`~kindle_converter.pdf.ocr.OCREngineUnavailableError` rather than
+    silently producing an empty book.
+    """
+
+    __slots__ = ("_engine",)
+
+    def __init__(self) -> None:
+        self._engine: OCREngine | None = None
+
+    def recognize(self, image: pymupdf.Pixmap) -> str:
+        """Recognize ``image`` with Tesseract, building the engine once."""
+        if self._engine is None:
+            from .pdf.ocr import TesseractEngine
+
+            self._engine = TesseractEngine()
+        return self._engine.recognize(image)

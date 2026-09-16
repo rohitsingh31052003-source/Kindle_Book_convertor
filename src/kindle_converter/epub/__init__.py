@@ -1,9 +1,15 @@
 """EPUB output generation.
 
 This package converts the format-independent
-:class:`~kindle_converter.document.models.Book` model into a valid,
-reflowable EPUB. :func:`build_epub` is the public entry point; the low-level
-rendering lives in :mod:`kindle_converter.epub.builder`.
+:class:`~kindle_converter.document.models.Book` model into a reflowable,
+Kindle-oriented EPUB. :func:`build_epub` is the public entry point; the
+low-level rendering lives in :mod:`kindle_converter.epub.builder`.
+
+The M4.1 boundary is strict: this layer receives a ``Book`` and renders it.
+It never inspects PDF pages, runs OCR, detects scanned pages, reconstructs
+paragraphs, derives reading order, or makes PDF-specific structural
+decisions -- all of that belongs to the PDF/reconstruction pipeline, which
+produces the ``Book``. Formal EPUB validation is introduced in M4.2.
 """
 
 from .builder import (

@@ -75,6 +75,12 @@ reconstruction adapter: it consumes the M3.5 per-page routing results
 M2 stack byte-identically for native text, and appends OCR-derived body
 paragraphs page by page (native first, then OCR) for SCANNED/MIXED pages.
 OCR paragraphs carry ``TextSource.OCR`` and no fabricated geometry.
+
+Since M4.1 the resulting :class:`~kindle_converter.document.models.Book`
+(with M2.13 images attached) is the single input of the EPUB layer:
+``kindle_converter.convert_pdf_to_epub`` composes ``convert_pdf_to_book``
+with ``kindle_converter.epub.build_epub`` for TEXT, SCANNED, and MIXED PDFs,
+so no PDF/OCR logic is duplicated on the output side.
 """
 from .analyzer import (
     EmptyPDFError,

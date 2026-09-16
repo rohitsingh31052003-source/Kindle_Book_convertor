@@ -49,20 +49,25 @@ class PDFExtractionError(Exception):
 
 
 class ScannedPDFError(PDFExtractionError):
-    """Raised when asked to extract text from a SCANNED (image-only) PDF.
+    """Raised when ``extract_book`` is asked to extract a SCANNED PDF.
 
-    OCR is not implemented yet, so a scanned document cannot be converted;
-    this exception is raised instead of silently producing an empty or
-    partial book.
+    ``extract_book`` is the native-text extractor only: it performs no OCR
+    and refuses an image-only document instead of silently producing an
+    empty or partial book. Scanned PDFs are handled by the OCR-aware pipeline
+    (:func:`kindle_converter.convert_pdf_to_book`, M3.6), which is what
+    :func:`kindle_converter.convert_pdf_to_epub` uses since M4.1.
     """
 
 
 class MixedPDFError(PDFExtractionError):
-    """Raised when asked to extract text from a MIXED PDF.
+    """Raised when ``extract_book`` is asked to extract a MIXED PDF.
 
-    ``extract_book`` deliberately refuses to silently pretend a mixed
-    document is a fully text-based one. Handling mixed documents (for
-    example by OCR-ing the image pages) is a later milestone.
+    ``extract_book`` performs no OCR and deliberately refuses to silently
+    pretend a mixed document is a fully text-based one, which would convert
+    only part of it. Mixed documents are handled by the OCR-aware pipeline
+    (:func:`kindle_converter.convert_pdf_to_book`, via the M3.5 per-page
+    routing), which is what :func:`kindle_converter.convert_pdf_to_epub`
+    uses since M4.1.
     """
 
 
@@ -102,11 +107,13 @@ def extract_book(source: PathLike | pymupdf.Document) -> Book:
     NoContentError
         If every page is both text-free and image-free (blank document).
     ScannedPDFError
-        If the document is classified ``PDFType.SCANNED``; OCR is not yet
-        implemented.
+        If the document is classified ``PDFType.SCANNED``; ``extract_book``
+        performs no OCR (use ``convert_pdf_to_book`` /
+        ``convert_pdf_to_epub`` for scanned PDFs).
     MixedPDFError
         If the document is classified ``PDFType.MIXED``; the extractor
-        refuses hidden partial conversion.
+        refuses hidden partial conversion (mixed PDFs are handled by the
+        OCR-aware ``convert_pdf_to_book`` pipeline).
 
     Examples
     --------
@@ -119,14 +126,17 @@ def extract_book(source: PathLike | pymupdf.Document) -> Book:
         analysis = analyze_pdf(doc)
         if analysis.document_type is PDFType.SCANNED:
             raise ScannedPDFError(
-                "The PDF is SCANNED (image-only), but OCR is not implemented "
-                "yet; cannot extract text from it."
+                "The PDF is SCANNED (image-only); extract_book performs no "
+                "OCR, so it cannot extract text from it. Use "
+                "convert_pdf_to_book / convert_pdf_to_epub, which run "
+                "scanned pages through OCR."
             )
         if analysis.document_type is PDFType.MIXED:
             raise MixedPDFError(
-                "The PDF is MIXED (part text, part images); refusing to "
-                "silently convert only part of it. Mixed handling is a later "
-                "milestone."
+                "The PDF is MIXED (part text, part images); extract_book "
+                "performs no OCR and refuses to silently convert only part "
+                "of it. Use convert_pdf_to_book / convert_pdf_to_epub, "
+                "which route mixed pages through OCR."
             )
         return _build_book(doc)
     finally:

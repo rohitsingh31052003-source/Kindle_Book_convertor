@@ -6,9 +6,9 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 1.0 — Project Foundation
+**Development stage:** Milestone 4 — Kindle Output (M4.1 complete)
 
-The project is currently being built from the ground up. Milestone 1.0 sets up a clean, testable project foundation (packaging, package structure, test harness). PDF processing, EPUB generation, OCR, Kindle-specific optimization, and a graphical interface will be added in later milestones.
+The project now has a working conversion engine. PDF analysis, layout-aware reconstruction (reading order, paragraphs, headings, chapters, page-number and header/footer removal, metadata, images), OCR-aware processing for scanned and mixed PDFs, and Kindle-oriented EPUB generation are implemented and covered by a deterministic test suite. EPUB validation (M4.2), AZW3 conversion (M4.3), cover handling (M4.4), Kindle-specific formatting improvements (M4.5), and a graphical interface are upcoming milestones.
 
 ## Goals
 
@@ -282,6 +282,70 @@ reading order, or deduplication of the two streams). Pages are processed in
 document order with 1-based page numbers, and results are always returned in
 that order. OCR engines and renderers are injectable through the public API.
 
+### Unified PDF → Book → EPUB pipeline (M4.1)
+
+Milestone 4.1 makes EPUB generation the production output path for every
+supported PDF, through a single pipeline:
+
+```text
+PDF → convert_pdf_to_book() → Book → build_epub() → EPUB
+```
+
+* **Text PDFs** — native reconstruction produces the `Book`, which is then
+  rendered as an EPUB.
+* **Scanned PDFs** — pages are routed through the OCR-aware processing path
+  (render → OCR → cleanup → structural reconstruction) to produce the `Book`,
+  which is rendered by the same EPUB builder.
+* **Mixed PDFs** — native text and OCR text are reconstructed into one `Book`
+  (native paragraphs first, OCR paragraphs after, never merged), which is
+  rendered by the same EPUB builder.
+
+There is exactly **one** EPUB rendering path, and it consumes the
+format-independent `Book` model only: the EPUB layer performs no PDF
+inspection, OCR, scanned-page detection, paragraph reconstruction, reading
+order, or heading detection. (The M1.5-era behavior in which
+`convert_pdf_to_epub` refused scanned and mixed PDFs has been removed;
+`extract_book` remains a text-only extractor, and its `ScannedPDFError` /
+`MixedPDFError` exceptions are unchanged for callers that use it directly.)
+
+`convert_pdf_to_epub(source, output, *, engine=None, renderer=None, dpi=...)`
+accepts an optional OCR engine. When none is injected, Tesseract is used
+*lazily*: the built-in engine is only constructed for the first scanned/mixed
+page that actually needs recognition, so text-only conversion never requires
+the optional `ocr` extra or a Tesseract installation. Existing error behavior
+is preserved (`PDFReadError`, `EmptyPDFError`, `NoContentError`, and
+`EPUBGenerationError` remain identifiable), and OCR failures surface as the
+existing `OCRError` / `OCREngineUnavailableError` domain errors.
+
+### Kindle-oriented EPUB output (M4.1)
+
+The generated EPUB is a **reflowable ebook**, not a PDF replica:
+
+* normal document flow only — no fixed page dimensions, no absolute
+  positioning, no viewport units, no JavaScript, no external resources;
+* semantic markup: headings stay `<h1>`–`<h6>`, paragraphs stay `<p>`, images
+  stay `<img>`;
+* a small, conservative, Kindle-oriented stylesheet (`style.css`) supplies the
+  body text, paragraph, heading, image, and page-break defaults;
+* images keep their original bytes and media types and are constrained to the
+  reading width (`max-width: 100%; height: auto`);
+* `PageBreak` semantics become a structural break element
+  (`page-break-after` / `break-after`) rather than a fixed PDF-sized page;
+* chapter order, titles, and navigation are preserved (EPUB 3 `nav.xhtml` plus
+  an `toc.ncx` for older readers);
+* the metadata carried by the `Book` (title, author, language, publisher,
+  identifier, description, subject) is preserved.
+
+Output is deterministic as far as the EPUB library allows: repeated builds of
+the same `Book` produce identical chapters, resources, navigation, CSS, and
+package metadata. EbookLib itself stamps a `dcterms:modified` timestamp (and
+ZIP entry times) into the container; that library-side variation is documented
+rather than worked around.
+
+EPUB **validation** is M4.2 and is not part of M4.1; AZW3 conversion (M4.3),
+cover handling (M4.4), and Kindle-specific formatting improvements (M4.5) are
+likewise out of scope here.
+
 ### Building the package
 
 ```bash
@@ -339,7 +403,7 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 
 ## Development Roadmap
 
-### Milestone 1.0 — Project Foundation *(current)*
+### Milestone 1.0 — Project Foundation
 
 * [x] Initialize Python project
 * [x] Establish package structure
@@ -349,17 +413,22 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 * [x] Implement basic text extraction
 * [x] Implement initial EPUB generation
 * [x] Create an end-to-end PDF → EPUB pipeline
+* [x] Create document domain model
+* [x] Implement PDF type analysis
+* [x] Implement basic text extraction
+* [x] Implement initial EPUB generation
+* [x] Create an end-to-end PDF → EPUB pipeline
 
 ### Milestone 2 — Book Reconstruction
 
-* [x] Chapter detection
+* [x] Chapter detection (M2.9)
 * [x] Heading detection (M2.4 — layout-based, conservative, deterministic)
 * [x] Paragraph reconstruction (M2.3)
-* [x] Header/footer removal
-* [x] Page-number removal
-* [x] Table of contents generation
-* [x] Metadata handling
-* [x] Image extraction and placement
+* [x] Header/footer removal (M2.5)
+* [x] Page-number removal (M2.10)
+* [x] Table of contents generation (M2.11)
+* [x] Metadata handling (M2.12)
+* [x] Image extraction and placement (M2.13)
 
 ### Milestone 3 — Scanned PDFs and OCR
 
@@ -368,11 +437,12 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 * [x] OCR processing
 * [x] OCR cleanup (M3.4 — conservative, deterministic; no recognition correction)
 * [x] Mixed text/image document handling (M3.5 — deterministic per-page OCR routing)
-* [x] Improve structural reconstruction
+* [x] Improve structural reconstruction (M3.6 — OCR-aware reconstruction)
 
 ### Milestone 4 — Kindle Output
 
-* [ ] Kindle-friendly EPUB generation
+* [x] Kindle-friendly EPUB generation (M4.1 — one reflowable EPUB path from
+  the unified `Book`, for TEXT, SCANNED, and MIXED PDFs)
 * [ ] EPUB validation
 * [ ] AZW3 conversion
 * [ ] Cover handling

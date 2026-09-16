@@ -1,14 +1,32 @@
 """EPUB generation from the format-independent :class:`Book` model.
 
-Milestone 1.4. This module converts an existing
+Milestone 1.4, extended for the Kindle-ready rendering profile in M4.1. This
+module converts an existing
 :class:`~kindle_converter.document.models.Book` -- the output of the PDF
 layer -- into a reflowable EPUB. It consumes the document model only and
-knows nothing about PDFs.
+knows nothing about PDFs: no page inspection, OCR, scanned-page detection,
+paragraph reconstruction, reading order, or heading detection happens here.
+
+Rendering profile (M4.1)
+------------------------
+The output is a **reflowable ebook**, never a PDF replica:
+
+* normal document flow only -- no fixed page dimensions, no absolute
+  positioning, no viewport units, no JavaScript, no external resources;
+* semantic markup: ``<h1>``..``<h6>`` stay headings, ``<p>`` stays a
+  paragraph, ``<img>`` is constrained to the available reading width;
+* ``PageBreak`` blocks become an empty, class-marked ``div`` whose
+  ``page-break-after``/``break-after`` CSS forces a break in the reading
+  system without turning a PDF page into a fixed-size EPUB page;
+* a small, deterministic stylesheet (:data:`STYLESHEET_CSS`) provides
+  conservative defaults for body text, paragraphs, headings, images, and
+  page breaks.
 
 The mapping is deterministic: a given ``Book`` always produces the same
-chapter order, block order, resource names, TOC, and CSS. EbookLib may add
-its own package metadata/timestamps to the container; that is accepted
-rather than fought.
+chapter order, block order, resource names, TOC, and CSS. The only
+non-logical variation is EbookLib's own container metadata (a
+``dcterms:modified`` timestamp and ZIP entry times); that library detail is
+accepted and documented rather than fought.
 """
 
 from __future__ import annotations
@@ -91,6 +109,11 @@ def build_epub(
 ) -> None:
     """Build a reflowable EPUB from ``book`` and write it to ``output``.
 
+    The output is a Kindle-oriented, reflowable ebook: semantic chapter
+    documents, headings, paragraphs, images, and page breaks in normal
+    document flow (see the module docstring for the M4.1 rendering profile).
+    No PDF-derived page geometry is reproduced anywhere.
+
     Parameters
     ----------
     book:
@@ -140,9 +163,14 @@ def _build_epub_book(book: Book, language: str | None) -> epub.EpubBook:
 
     The ``Book``'s chapters become ``EpubHtml`` documents, its images become
     ``EpubImage`` resources, and its chapters form both the TOC and the
-    spine. Resource names come from the rendering pass, so the XHTML
+    spine (deterministic order: document order, with the navigation document
+    first). Resource names come from the rendering pass, so the XHTML
     ``src`` attributes and the registered EPUB resources can never drift
     apart.
+
+    Chapter titles are represented semantically as the chapter document's
+    title and its navigation entry; the chapter body is exactly the
+    author's block sequence, which already contains the book's own headings.
     """
     epub_book = epub.EpubBook()
     _add_metadata(epub_book, book.metadata, language)
@@ -374,38 +402,61 @@ def _resolve_content_type(block: Image) -> str:
 # CSS
 # --------------------------------------------------------------------------- #
 
-#: Minimal stylesheet for a reflowable, Kindle-friendly book. Deliberately
-#: plain: no themes, custom fonts, columns, fixed positioning, or attempt to
-#: reproduce PDF typography.
+#: Conservative, Kindle-oriented stylesheet for a reflowable book (M4.1).
+#: Deliberately plain and self-contained: relative units only, normal
+#: document flow, no fixed page dimensions, no absolute positioning, no
+#: viewport units, no JavaScript, no animations, no external resources, and
+#: no attempt to reproduce PDF typography. Page margins are left to the
+#: reading system; the spacing rules here only control block flow, so the
+#: text reflows naturally on any screen size. Advanced Kindle typography is
+#: explicitly out of scope until M4.5.
 STYLESHEET_CSS = """\
-/* Minimal stylesheet for a reflowable book. */
+/* Kindle-oriented stylesheet for a reflowable book (M4.1). */
+html {
+    font-size: 1em;
+}
 body {
-    font-family: serif, Georgia, "Times New Roman", sans-serif;
+    font-family: serif, Georgia, "Times New Roman", serif;
     font-size: 1em;
     line-height: 1.5;
     margin: 0;
     padding: 0;
     color: #000;
+    text-align: left;
 }
 p {
     margin: 0 0 1em 0;
+    padding: 0;
     text-indent: 0;
+    line-height: 1.5;
 }
 h1, h2, h3, h4, h5, h6 {
+    font-family: inherit;
     font-weight: bold;
+    font-style: normal;
     line-height: 1.3;
-    margin: 1.2em 0 0.6em 0;
+    margin: 1.2em 0 0.5em 0;
+    padding: 0;
+    text-align: left;
     page-break-after: avoid;
+    break-after: avoid;
 }
 h1 { font-size: 1.6em; }
 h2 { font-size: 1.4em; }
-h3, h4, h5, h6 { font-size: 1.2em; }
+h3 { font-size: 1.25em; }
+h4, h5, h6 { font-size: 1.1em; }
 img.image {
+    display: block;
     max-width: 100%;
     height: auto;
+    margin: 0.5em 0;
 }
 div.page-break {
+    height: 0;
+    margin: 0;
+    padding: 0;
     page-break-after: always;
+    break-after: always;
 }
 """
 

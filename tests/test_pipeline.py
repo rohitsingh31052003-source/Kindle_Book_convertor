@@ -1,11 +1,12 @@
-"""End-to-end PDF -> EPUB pipeline tests (Milestone 1.5).
+"""End-to-end PDF -> Book -> EPUB pipeline tests (Milestones 1.5 + 4.1).
 
 These tests verify the *composition* of the existing stages -- analyze ->
-extract -> build -- through the public :func:`convert_pdf_to_epub`
-entry point. PDF classification, extraction details, and EPUB rendering
-are already covered by their own milestone test modules; this module only
-proves the pipeline wires them together correctly (and that it pronounces
-currently unsupported inputs with the existing domain exceptions).
+route/OCR -> reconstruct -> build -- through the public
+:func:`convert_pdf_to_epub` entry point. PDF classification, extraction
+details, OCR, and EPUB rendering are already covered by their own milestone
+test modules; this module only proves the pipeline wires them together
+correctly for TEXT, SCANNED, and MIXED documents (scanned/mixed use an
+injected fake OCR engine, so the deterministic suite needs no Tesseract).
 
 All PDFs are generated on the fly with PyMuPDF; nothing here requires
 internet access or external fixture files.
@@ -25,10 +26,8 @@ from kindle_converter import convert_pdf_to_epub
 from kindle_converter.epub import build_epub
 from kindle_converter.pdf import (
     EmptyPDFError,
-    MixedPDFError,
     NoContentError,
     PDFReadError,
-    ScannedPDFError,
     extract_book,
 )
 
@@ -140,6 +139,24 @@ def read_back(path: Path) -> epub.EpubBook:
     return epub.read_epub(str(path))
 
 
+class FakeOCREngine:
+    """Deterministic ``OCREngine`` returning one predefined text per call.
+
+    The pipeline never creates a hidden engine, so OCR-aware conversion can
+    be tested without Tesseract: the last text is reused if more pages are
+    OCR'd than texts were supplied.
+    """
+
+    def __init__(self, texts: list[str]) -> None:
+        self.texts = list(texts)
+        self.calls: list[pymupdf.Pixmap] = []
+
+    def recognize(self, image: pymupdf.Pixmap) -> str:
+        self.calls.append(image)
+        index = min(len(self.calls) - 1, len(self.texts) - 1)
+        return self.texts[index]
+
+
 def chapter_document(path: Path, index: int = 0) -> str:
     """The rendered XHTML of chapter ``index`` as a string."""
     with zipfile.ZipFile(path) as archive:
@@ -237,30 +254,44 @@ class TestMultiplePages:
 
 
 # --------------------------------------------------------------------------- #
-# Unsupported input rejection
+# Scanned / mixed input routing (M4.1: no longer rejected)
 # --------------------------------------------------------------------------- #
 
 
-class TestUnsupportedInputs:
-    def test_scanned_pdf_raises(self, tmp_path) -> None:
+class TestScannedAndMixedInputs:
+    def test_scanned_pdf_converts_through_ocr_book_pipeline(
+        self, tmp_path
+    ) -> None:
+        """SCANNED: PDF -> OCR-aware Book -> EPUB, with an injected engine."""
         pdf_path = make_scanned_pdf(tmp_path / "scanned.pdf")
         out = tmp_path / "book.epub"
+        engine = FakeOCREngine(
+            ["Scanned page one text.", "Scanned page two text."]
+        )
 
-        with pytest.raises(ScannedPDFError):
-            convert_pdf_to_epub(pdf_path, out)
+        convert_pdf_to_epub(pdf_path, out, engine=engine)
 
-        assert not out.exists()
+        assert out.is_file()
+        assert len(engine.calls) == 2  # one OCR call per scanned page
+        bodies = "".join(chapter_bodies(out))
+        assert "Scanned page one text." in bodies
+        assert "Scanned page two text." in bodies
 
-    def test_mixed_pdf_raises(self, tmp_path) -> None:
+    def test_mixed_pdf_converts_through_unified_pipeline(self, tmp_path) -> None:
+        """MIXED: native text and OCR text both reach the EPUB body."""
         pdf_path = make_mixed_pdf(
             tmp_path / "mixed.pdf", text_pages=3, image_pages=2
         )
         out = tmp_path / "book.epub"
+        engine = FakeOCREngine(["Ocr text of an image-only page."] * 2)
 
-        with pytest.raises(MixedPDFError):
-            convert_pdf_to_epub(pdf_path, out)
+        convert_pdf_to_epub(pdf_path, out, engine=engine)
 
-        assert not out.exists()
+        assert out.is_file()
+        assert len(engine.calls) == 2  # only the image-only pages need OCR
+        bodies = "".join(chapter_bodies(out))
+        assert "Winston Smith" in bodies  # native pages survive untouched
+        assert "Ocr text of an image-only page." in bodies
 
     def test_empty_pdf_raises(self, tmp_path) -> None:
         pdf_path = tmp_path / "empty.pdf"
