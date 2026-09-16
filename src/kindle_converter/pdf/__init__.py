@@ -49,6 +49,14 @@ typed :class:`OCRResult` per page. The built-in :class:`TesseractEngine`
 wraps the external Tesseract executable through the optional ``ocr``
 dependencies; it performs **no** OCR cleanup and **no** structural
 reconstruction, and nothing routes scanned pages through OCR yet.
+
+The ``ocr_cleanup`` submodule (Milestone 3.4) consumes those raw
+:class:`OCRResult` values and applies a conservative, deterministic text
+cleanup pass (``clean_ocr_text`` / ``clean_ocr_result`` /
+``clean_ocr_pages``), producing an immutable :class:`CleanedOCRResult` per
+page. The cleanup layer is strictly post-OCR: it never renders PDFs, never
+calls an OCR engine, and never performs structural reconstruction or
+recognition correction.
 """
 from .analyzer import (
     EmptyPDFError,
@@ -244,6 +252,15 @@ from .ocr import (
     ocr_pages,
 )
 
+# OCR cleanup API (Milestone 3.4)
+from .ocr_cleanup import (
+    MAX_CONSECUTIVE_BLANK_LINES,
+    CleanedOCRResult,
+    clean_ocr_pages,
+    clean_ocr_result,
+    clean_ocr_text,
+)
+
 __all__ = [
     "PDFAnalysis",
     "PDFAnalysisError",
@@ -398,4 +415,10 @@ __all__ = [
     "OCREngineUnavailableError",
     "ocr_page",
     "ocr_pages",
+    # OCR cleanup (Milestone 3.4)
+    "MAX_CONSECUTIVE_BLANK_LINES",
+    "CleanedOCRResult",
+    "clean_ocr_text",
+    "clean_ocr_result",
+    "clean_ocr_pages",
 ]

@@ -248,6 +248,18 @@ installer, never by this project.
    available, the optional OCR integration tests skip cleanly; the core
    test suite never requires Tesseract.
 
+### OCR cleanup (scanned PDFs)
+
+Cleanup (Milestone 3.4) runs **after** OCR as a separate, deterministic
+layer (`clean_ocr_text` / `clean_ocr_result` / `clean_ocr_pages`). It is
+deliberately conservative: it normalizes line endings, applies Unicode NFC
+normalization, removes invalid control characters, trims trailing line
+whitespace, collapses pathological blank-line runs, and strips document-edge
+whitespace. It never attempts recognition correction — no spelling,
+dictionary, grammar, character-substitution, or language-model correction —
+and it never performs structural reconstruction. OCR recognition output
+itself is consumed verbatim by cleanup.
+
 ### Building the package
 
 ```bash
@@ -332,7 +344,7 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 * [x] Detect scanned PDFs
 * [x] Render PDF pages
 * [x] OCR processing
-* [ ] OCR cleanup
+* [x] OCR cleanup (M3.4 — conservative, deterministic; no recognition correction)
 * [ ] Mixed text/image document handling
 * [ ] Improve structural reconstruction
 
