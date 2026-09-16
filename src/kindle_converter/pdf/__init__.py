@@ -57,6 +57,17 @@ cleanup pass (``clean_ocr_text`` / ``clean_ocr_result`` /
 page. The cleanup layer is strictly post-OCR: it never renders PDFs, never
 calls an OCR engine, and never performs structural reconstruction or
 recognition correction.
+
+The ``processing`` submodule (Milestone 3.5) is the document/page-level
+**routing layer**: given a PDF and its M3.1 analysis, it decides how each
+page is processed (``process_page`` / ``process_pages``), returning an
+immutable :class:`PageProcessingResult` per page. TEXT pages use native
+extraction only; SCANNED pages use ``render → OCR → cleanup``; MIXED pages
+preserve native text **and** keep OCR-derived text separately -- the two
+sources are never concatenated or merged. Routing is deterministic, runs
+strictly in page order, and injects the OCR engine (and optionally the
+renderer) so it is testable without Tesseract. It performs no structural
+reconstruction.
 """
 from .analyzer import (
     EmptyPDFError,
@@ -261,6 +272,14 @@ from .ocr_cleanup import (
     clean_ocr_text,
 )
 
+# Mixed text/image page processing / routing API (Milestone 3.5)
+from .processing import (
+    PageProcessingResult,
+    PageRenderer,
+    process_page,
+    process_pages,
+)
+
 __all__ = [
     "PDFAnalysis",
     "PDFAnalysisError",
@@ -421,4 +440,9 @@ __all__ = [
     "clean_ocr_text",
     "clean_ocr_result",
     "clean_ocr_pages",
+    # Mixed text/image processing / routing (Milestone 3.5)
+    "PageProcessingResult",
+    "PageRenderer",
+    "process_page",
+    "process_pages",
 ]

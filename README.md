@@ -260,6 +260,28 @@ dictionary, grammar, character-substitution, or language-model correction —
 and it never performs structural reconstruction. OCR recognition output
 itself is consumed verbatim by cleanup.
 
+### Mixed text/image routing (M3.5)
+
+Milestone 3.5 adds per-page routing for mixed text/image documents
+(`process_page` / `process_pages` in `kindle_converter.pdf.processing`).
+Each page is routed deterministically from its `PageAnalysis`
+classification:
+
+* **Text pages** — native text extraction only (`deduplicate_layout` /
+  `extract_page_layout`); OCR never runs.
+* **Scanned pages** — rendered (`render_page`), OCR'd (`ocr_page`), and
+  cleaned (`clean_ocr_result`) in sequence.
+* **Mixed pages** — native text is preserved **and** a full-page OCR pass
+  is run through cleanup. The two extractions are kept as separate,
+  immutable fields (`native_text` / `ocr_text`) and are never merged;
+  partial overlap between them is intentional and deduplication is deferred
+  to a later structural-reconstruction milestone.
+
+The module performs no structural reconstruction (no paragraphs, headings,
+reading order, or deduplication of the two streams). Pages are processed in
+document order with 1-based page numbers, and results are always returned in
+that order. OCR engines and renderers are injectable through the public API.
+
 ### Building the package
 
 ```bash
@@ -345,7 +367,7 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 * [x] Render PDF pages
 * [x] OCR processing
 * [x] OCR cleanup (M3.4 — conservative, deterministic; no recognition correction)
-* [ ] Mixed text/image document handling
+* [x] Mixed text/image document handling (M3.5 — deterministic per-page OCR routing)
 * [ ] Improve structural reconstruction
 
 ### Milestone 4 — Kindle Output
