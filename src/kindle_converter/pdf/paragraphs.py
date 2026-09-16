@@ -83,6 +83,18 @@ Every reconstructed paragraph retains:
 * the source :class:`~kindle_converter.pdf.layout.LayoutBlock` objects
 * the original M2.1 extraction order indices
 * the M2.2 reading-order indices
+* the :class:`TextSource` of the text (native PDF text vs OCR text)
+
+OCR paragraphs (Milestone 3.6)
+------------------------------
+:func:`reconstruct_ocr_paragraphs` reconstructs paragraphs from cleaned OCR
+text (:class:`~kindle_converter.pdf.ocr_cleanup.CleanedOCRResult`) with no
+layout geometry available. Paragraph boundaries come from the only
+deterministic signal OCR preserves: blank lines. OCR paragraphs reuse the
+same conservative single-space/dehyphenation joining rule as native
+paragraphs, carry ``TextSource.OCR``, and keep **empty** source
+lines/blocks/order provenance -- no bbox, font, or reading-order metadata is
+fabricated for OCR text.
 
 This module is independent of the format-independent
 :mod:`kindle_converter.document` model. The domain :class:`Paragraph`
@@ -95,6 +107,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import StrEnum
 
 from .layout import LayoutBlock, LayoutPage, TextLine
 from .reading_order import OrderedLayout, OrderedPage
@@ -169,6 +182,19 @@ RE_SPACE = re.compile(r"\s+")
 # --------------------------------------------------------------------------- #
 
 
+class TextSource(StrEnum):
+    """Provenance of a reconstructed paragraph's text.
+
+    ``NATIVE`` means the text came from the PDF's native text layer through
+    the M2.1 layout path. ``OCR`` means the text came from OCR
+    recognition (M3.3/M3.4/M3.5). The two sources are never merged or
+    guessed here; every paragraph carries the source it actually came from.
+    """
+
+    NATIVE = "native"
+    OCR = "ocr"
+
+
 @dataclass(frozen=True, slots=True)
 class ReconstructedParagraph:
     """A logical paragraph reconstructed from physical text lines.
@@ -203,6 +229,12 @@ class ReconstructedParagraph:
     #: Whether this paragraph ends at a page boundary (the last line on
     #: its page). Always a paragraph boundary by policy.
     ends_at_page_boundary: bool = False
+
+    #: Provenance of the paragraph text: native PDF text (M2.1 layout) or
+    #: OCR-recognized text (M3.3/M3.4/M3.5). Never inferred from content;
+    #: always the source the text actually came from. OCR paragraphs carry
+    #: empty ``source_lines``/``source_blocks`` provenance.
+    source: TextSource = TextSource.NATIVE
 
     @property
     def line_count(self) -> int:
@@ -336,22 +368,25 @@ def _likely_wrapping_hyphen(upper_text: str, lower_text: str) -> bool:
     return False
 
 
-def _join_lines(lines: list[TextLine]) -> str:
-    """Join a sequence of lines into a single paragraph string.
+def _join_texts(texts: list[str]) -> str:
+    """Join a sequence of line texts into a single paragraph string.
 
     Handles:
     * single space between lines
     * conservative dehyphenation at line breaks
     * stripping leading indent (up to 4 spaces) from first line
     * whitespace collapse
+
+    Shared by native M2.3 paragraphs (:func:`_join_lines`) and OCR
+    paragraphs (:func:`reconstruct_ocr_paragraphs`) so both sources use the
+    identical textual joining rule.
     """
-    if not lines:
+    if not texts:
         return ""
 
     parts: list[str] = []
     separators: list[str] = []  # Separator before each part (default " ")
-    for i, line in enumerate(lines):
-        text = line.text
+    for i, text in enumerate(texts):
         if i == 0:
             # Strip leading paragraph indent (up to 4 spaces).
             text = re.sub(r"^ {1,4}", "", text)
@@ -373,6 +408,11 @@ def _join_lines(lines: list[TextLine]) -> str:
     for i in range(1, len(parts)):
         result += separators[i] + parts[i]
     return RE_SPACE.sub(" ", result).strip()
+
+
+def _join_lines(lines: list[TextLine]) -> str:
+    """Join a sequence of lines into a single paragraph string."""
+    return _join_texts([line.text for line in lines])
 
 
 def _is_short_line_isolated(
@@ -613,3 +653,97 @@ def reconstruct_paragraphs(
         pages = tuple(reconstruct_page_paragraphs(p) for p in source.pages)
         return ParagraphLayout(pages=pages)
     return reconstruct_page_paragraphs(source)
+
+
+def reconstruct_ocr_paragraphs(
+    text: str, page_number: int
+) -> tuple[ReconstructedParagraph, ...]:
+    """Reconstruct paragraphs from cleaned OCR text (Milestone 3.6).
+
+    OCR output carries no layout geometry, so the only deterministic
+    boundary signal available is the line structure preserved by the M3.4
+    cleanup layer: a blank line (or a run of blank lines) between non-empty
+    lines is a paragraph boundary. Consecutive non-blank lines form one
+    paragraph and are joined with the same conservative single-space /
+    dehyphenation rule as native M2.3 paragraphs
+    (:func:`reconstruct_page_paragraphs`), so OCR text is never flattened
+    to a single unstructured run of words.
+
+    The paragraphs are returned in page order and carry
+    ``TextSource.OCR`` with **empty provenance**: OCR recognition provides
+    no bbox, font, block, line-order, or reading-order metadata, and none
+    is fabricated here (``source_lines``/``source_blocks``/
+    ``source_line_orders``/``reading_order_indices`` are all empty).
+    Domain punctuation and wording are preserved exactly as OCR produced
+    them; nothing is de-duplicated, merged, or semantically rewritten.
+
+    Parameters
+    ----------
+    text:
+        The cleaned OCR text for one page, with its line structure
+        preserved (typically ``CleanedOCRResult.text``).
+    page_number:
+        The 1-based PDF page number, carried unchanged into every
+        reconstructed paragraph.
+
+    Returns
+    -------
+    tuple[ReconstructedParagraph, ...]
+        One paragraph per blank-line-separated group of non-empty lines.
+        Whitespace-only paragraphs are never emitted; a page with no
+        non-empty lines returns an empty tuple.
+
+    Raises
+    ------
+    TypeError
+        If ``text`` is not a ``str``.
+    ValueError
+        If ``page_number`` is not a positive integer.
+    """
+    if not isinstance(text, str):
+        raise TypeError(
+            "text must be a str (cleaned OCR text for one page), got "
+            f"{type(text).__name__ if text is not None else 'None'}"
+        )
+    if isinstance(page_number, bool) or not isinstance(page_number, int):
+        raise ValueError(
+            f"page_number must be an int, got {type(page_number).__name__}"
+        )
+    if page_number < 1:
+        raise ValueError(f"page_number must be >= 1, got {page_number}")
+
+    paragraphs: list[ReconstructedParagraph] = []
+    current: list[str] = []
+    for line in text.splitlines():
+        if line.strip():
+            current.append(line)
+            continue
+        if current:
+            _append_ocr_paragraph(paragraphs, current, page_number)
+            current = []
+    if current:
+        _append_ocr_paragraph(paragraphs, current, page_number)
+    return tuple(paragraphs)
+
+
+def _append_ocr_paragraph(
+    paragraphs: list[ReconstructedParagraph],
+    lines: list[str],
+    page_number: int,
+) -> None:
+    """Append one OCR paragraph for ``lines`` (skipping whitespace-only)."""
+    joined = _join_texts(lines)
+    if not joined.strip():
+        return
+    paragraphs.append(
+        ReconstructedParagraph(
+            text=joined,
+            page_number=page_number,
+            source_lines=(),
+            source_blocks=(),
+            source_line_orders=(),
+            reading_order_indices=(),
+            ends_at_page_boundary=False,
+            source=TextSource.OCR,
+        )
+    )

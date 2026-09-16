@@ -68,6 +68,13 @@ sources are never concatenated or merged. Routing is deterministic, runs
 strictly in page order, and injects the OCR engine (and optionally the
 renderer) so it is testable without Tesseract. It performs no structural
 reconstruction.
+
+The ``structural`` submodule (Milestone 3.6) is the OCR-aware structural
+reconstruction adapter: it consumes the M3.5 per-page routing results
+(``reconstruct_processed_pages`` / ``processed_pages_to_book``), reuses the
+M2 stack byte-identically for native text, and appends OCR-derived body
+paragraphs page by page (native first, then OCR) for SCANNED/MIXED pages.
+OCR paragraphs carry ``TextSource.OCR`` and no fabricated geometry.
 """
 from .analyzer import (
     EmptyPDFError,
@@ -140,6 +147,8 @@ from .paragraphs import (
     ParagraphLayout,
     ParagraphPage,
     ReconstructedParagraph,
+    TextSource,
+    reconstruct_ocr_paragraphs,
     reconstruct_page_paragraphs,
     reconstruct_paragraphs,
 )
@@ -280,6 +289,12 @@ from .processing import (
     process_pages,
 )
 
+# OCR-aware structural reconstruction API (Milestone 3.6)
+from .structural import (
+    processed_pages_to_book,
+    reconstruct_processed_pages,
+)
+
 __all__ = [
     "PDFAnalysis",
     "PDFAnalysisError",
@@ -322,6 +337,8 @@ __all__ = [
     "ParagraphLayout",
     "ParagraphPage",
     "ReconstructedParagraph",
+    "TextSource",
+    "reconstruct_ocr_paragraphs",
     "reconstruct_page_paragraphs",
     "reconstruct_paragraphs",
     "PARAGRAPH_GAP_FACTOR",
@@ -445,4 +462,7 @@ __all__ = [
     "PageRenderer",
     "process_page",
     "process_pages",
+    # OCR-aware structural reconstruction (Milestone 3.6)
+    "processed_pages_to_book",
+    "reconstruct_processed_pages",
 ]

@@ -305,6 +305,11 @@ def ordered_body_elements(
     stable. This is the V1 image/text relative-placement representation: an
     image between two paragraphs appears between them in this sequence.
     M2.3 paragraph reconstruction and M2.4/M2.5/M2.9 layers are untouched.
+
+    Paragraphs without source geometry (OCR-derived paragraphs,
+    ``TextSource.OCR``) have no measurable top; they sort **after** every
+    geometry-bearing element on the same page (``+inf``), so OCR content
+    follows the page's native content instead of jumping to the top.
     """
     keyed: list[
         tuple[float, int, int, ReconstructedBodyElement]
@@ -318,14 +323,20 @@ def ordered_body_elements(
 
 
 def _element_top(element: ReconstructedElement) -> float:
-    """Return the top ``y0`` of an element's first source line."""
+    """Return the top ``y0`` of an element's first source line.
+
+    An element without source geometry (OCR-derived paragraph) has no
+    measurable top and sorts last within its page (``+inf``): geometry-less
+    content follows the page's native content rather than floating to the
+    top.
+    """
     lines = element.paragraph.source_lines
     if lines:
         try:
             return float(lines[0].bbox[1])
         except Exception:
             pass
-    return float("-inf")
+    return float("inf")
 
 
 def _furniture_source_paragraphs(
