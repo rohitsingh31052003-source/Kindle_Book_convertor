@@ -6,9 +6,16 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 4 — Kindle Output (M4.1 complete)
+**Development stage:** Milestone 4 — Kindle Output (M4.1 and M4.2 complete)
 
-The project now has a working conversion engine. PDF analysis, layout-aware reconstruction (reading order, paragraphs, headings, chapters, page-number and header/footer removal, metadata, images), OCR-aware processing for scanned and mixed PDFs, and Kindle-oriented EPUB generation are implemented and covered by a deterministic test suite. EPUB validation (M4.2), AZW3 conversion (M4.3), cover handling (M4.4), Kindle-specific formatting improvements (M4.5), and a graphical interface are upcoming milestones.
+The project now has a working conversion engine with deterministic
+validation. PDF analysis, layout-aware reconstruction (reading order,
+paragraphs, headings, chapters, page-number and header/footer removal,
+metadata, images), OCR-aware processing for scanned and mixed PDFs,
+Kindle-oriented EPUB generation, and structural EPUB validation are
+implemented and covered by a deterministic test suite. AZW3
+conversion (M4.3), cover handling (M4.4), Kindle-specific formatting
+improvements (M4.5), and a graphical interface are upcoming milestones.
 
 ## Goals
 
@@ -68,17 +75,25 @@ The intended architecture is:
                   └────────┬────────┘
                            │
                            ▼
-                  ┌─────────────────┐
-                  │  EPUB Builder   │
-                  └────────┬────────┘
-                           │
-                           ▼
-                         EPUB
-                           │
-                           ▼
-                  ┌─────────────────┐
-                  │  AZW3 Converter  │
-                  └────────┬────────┘
+                   ┌─────────────────┐
+                   │  EPUB Builder   │
+                   └────────┬────────┘
+                            │
+                            ▼
+                          EPUB
+                            │
+                            ▼
+                   ┌─────────────────┐
+                   │  EPUB Validator │
+                   └────────┬────────┘
+                            │
+                            ▼
+                     valid EPUB
+                            │
+                            ▼
+                   ┌─────────────────┐
+                   │  AZW3 Converter  │
+                   └────────┬────────┘
                            │
                            ▼
                          AZW3
@@ -110,7 +125,7 @@ src/
     │   ├── builder.py
     │   ├── toc.py
     │   ├── css.py
-    │   └── validator.py
+    │   └── validation.py
     │
     ├── azw3/
     │   └── converter.py
@@ -346,6 +361,24 @@ EPUB **validation** is M4.2 and is not part of M4.1; AZW3 conversion (M4.3),
 cover handling (M4.4), and Kindle-specific formatting improvements (M4.5) are
 likewise out of scope here.
 
+EPUB **validation** is M4.2. It inspects the finished EPUB
+artifact independently of PDF processing and reports structured
+validation results:
+
+```text
+Book → build_epub() → EPUB → validate_epub() → EPUBValidationResult
+```
+
+`validate_epub()` accepts a filesystem path or the EPUB archive
+bytes. It imports no PDF/OCR code and never modifies the archive.
+It validates the ZIP container, `mimetype`, `META-INF/container.xml`,
+the OPF package document, required metadata, manifest, spine, XHTML
+documents, internal resource references, stylesheets, navigation,
+images, and page-break markers. Failures are reported as
+`EPUBValidationIssue` values with machine-readable
+`EPUBValidationCode` codes; expected malformed input never leaks as
+raw low-level exceptions.
+
 ### Building the package
 
 ```bash
@@ -443,7 +476,8 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 
 * [x] Kindle-friendly EPUB generation (M4.1 — one reflowable EPUB path from
   the unified `Book`, for TEXT, SCANNED, and MIXED PDFs)
-* [ ] EPUB validation
+* [x] EPUB validation (M4.2 — structural validation of generated EPUB
+  artifacts through `kindle_converter.epub.validate_epub`)
 * [ ] AZW3 conversion
 * [ ] Cover handling
 * [ ] Kindle-specific formatting improvements
