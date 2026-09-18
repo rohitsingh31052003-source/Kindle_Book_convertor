@@ -56,6 +56,21 @@ centered width-constrained images, and conservative break-avoidance. It adds
 no public configuration API and changes no structure, navigation, metadata,
 or page-break semantics.
 
+M5.1 adds the UI-independent application / pipeline API
+(:mod:`kindle_converter.application`): a single conversion use case that
+composes analysis, EPUB generation, validation, and optional AZW3 conversion
+behind a stable boundary for the upcoming graphical interface (or any other
+caller)::
+
+    >>> from kindle_converter.application import (
+    ...     ConversionApplication, ConversionRequest, OutputFormat)
+    >>> request = ConversionRequest(
+    ...     input_pdf="book.pdf", output_directory="out",
+    ...     formats={OutputFormat.EPUB, OutputFormat.AZW3})
+    >>> result = ConversionApplication().convert(
+    ...     request, progress=lambda p: print(p.stage, p.message))
+    >>> result.epub_path, result.azw3_path, result.validation
+
 Formal EPUB validation (M4.2), EPUB -> AZW3 conversion (M4.3), cover handling
 (M4.4), and Kindle-specific formatting improvements (M4.5) are implemented.
 """

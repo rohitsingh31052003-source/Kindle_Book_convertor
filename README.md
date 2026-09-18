@@ -6,7 +6,7 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 4 — Kindle Output (M4.1, M4.2, M4.3, M4.4 and M4.5 complete)
+**Development stage:** Milestone 5 — User Interface (M5.1 — Application / Pipeline API complete)
 
 The project now has a working conversion engine with deterministic
 validation. PDF analysis, layout-aware reconstruction (reading order,
@@ -15,8 +15,10 @@ metadata, images), OCR-aware processing for scanned and mixed PDFs,
 Kindle-oriented EPUB generation, structural EPUB validation, EPUB → AZW3
 conversion (via Calibre's `ebook-convert`), explicit optional cover
 handling, and Kindle-specific reflowable formatting improvements are
-implemented and covered by a deterministic test suite. A graphical
-interface is an upcoming milestone.
+implemented and covered by a deterministic test suite. The UI-independent
+application / pipeline API (M5.1, `kindle_converter.application`) now wraps
+the full conversion use case behind a stable boundary for the upcoming
+graphical interface.
 
 ## Goals
 
@@ -131,6 +133,13 @@ src/
     │   ├── validation.py
     │   ├── azw3.py        # M4.3: EPUB → AZW3 conversion API
     │   └── calibre.py     # M4.3: Calibre ebook-convert backend
+    │
+    ├── application/       # M5.1: UI-independent conversion use case
+    │   ├── converter.py   # ConversionApplication: analyze → EPUB → validate → AZW3
+    │   ├── request.py     # ConversionRequest / OutputFormat
+    │   ├── result.py      # ConversionResult
+    │   ├── progress.py    # ConversionStage / ConversionProgress / callback
+    │   └── errors.py      # ApplicationError boundary (subclasses PipelineError)
     │
     └── pipeline.py
 ```
@@ -689,6 +698,11 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 
 ### Milestone 5 — User Interface
 
+* [x] Application / Pipeline API (M5.1 — UI-independent
+  `kindle_converter.application`: `ConversionApplication.convert` composing
+  analysis, EPUB generation, validation, and optional AZW3; typed
+  `ConversionRequest`, `ConversionResult`, progress callback, and
+  application error boundary)
 * [ ] Simple desktop interface
 * [ ] Drag-and-drop input
 * [ ] Output format selection
