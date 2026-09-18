@@ -6,7 +6,7 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 5 — User Interface (M5.5 — background conversion with progress complete)
+**Development stage:** Milestone 5 — User Interface (M5.6 — results + validation presentation complete)
 
 The project has a working conversion engine with deterministic
 validation. PDF analysis, layout-aware reconstruction (reading order,
@@ -49,6 +49,24 @@ while a conversion is in flight — `closeEvent` waits for the running conversio
 to finish safely. The UI remains a thin presentation layer: the worker (and
 thus conversion) still only ever calls the M5.1 application API, and the core
 library never imports PySide6.
+
+M5.6 presents the outcome of a completed conversion and adds tested output
+actions. After a successful run the window shows a **results section** built
+entirely from the real application-layer `ConversionResult`: the status, the
+output format derived from `requested_formats`, and the exact `epub_path` /
+`azw3_path`. Every displayed value is read from the retained result object —
+nothing is recomputed or rerun. If the result carries an
+`EPUBValidationResult`, its status (valid/invalid), warning/error counts, and
+the structured issue messages are shown as a **validation section**; a result
+with validation disabled reports "Not run". The UI never reruns validation, and
+no second result model exists. **Open EPUB / Open AZW3 / Open Folder** buttons
+open the real output paths through an injectable platform seam
+(`kindle_converter.ui.platform.open_path`, replaced by recording doubles in
+tests); failures (missing output, failed platform open) are shown locally and
+never crash the window or modify the result. Stale results are protected: a
+previous result is cleared when the input, the output format, or the output
+directory changes, and when a new conversion starts, so an old result is never
+presented as the current request's.
 
 ## Goals
 
@@ -171,9 +189,10 @@ src/
     │   ├── progress.py    # ConversionStage / ConversionProgress / callback
     │   └── errors.py      # ApplicationError boundary (subclasses PipelineError)
     │
-    ├── ui/                # M5.2/M5.3/M5.4/M5.5: PySide6 desktop UI (ui extra)
+    ├── ui/                # M5.2-M5.6: PySide6 desktop UI (ui extra)
     │   ├── app.py         #   application entry point (create_application / main)
-    │   ├── main_window.py #   input selection + analysis + options + background conversion
+    │   ├── main_window.py #   input selection + analysis + options + results + output actions
+    │   ├── platform.py    #   M5.6: injectable platform-open seam (open_path)
     │   ├── worker.py      #   M5.5: QtCore-only ConversionWorker (off-GUI-thread convert)
     │   └── __main__.py    #   python -m kindle_converter.ui
     │
@@ -277,7 +296,7 @@ pytest
 For full development setup (including the runtime dependencies), use the
 editable install described above.
 
-### Desktop UI (M5.2 shell, M5.3 input selection + analysis, M5.4 conversion options, M5.5 background conversion)
+### Desktop UI (M5.2 shell, M5.3 input selection + analysis, M5.4 conversion options, M5.5 background conversion, M5.6 results + validation)
 
 The desktop application is a PySide6 UI (`kindle_converter.ui`). PySide6 is an
 **optional** dependency (the `ui` extra): the core library never imports it,
@@ -382,6 +401,48 @@ M5.5 adds background **conversion execution** to the window:
   is fully flushed in the tests (`DeferredDelete` events are dispatched while
   the window is still alive) so no queued delete can outlive a test and crash
   a later one.
+
+M5.6 adds **results + validation presentation** and **output actions** to the
+completed conversion:
+
+* **Results section.** After a conversion succeeds, a results section becomes
+  visible under the progress bar. It is populated only from the real M5.1
+  `ConversionResult` retained on the window: a completion status, an output
+  format label derived from the request's `requested_formats` (always
+  ``"EPUB"`` or ``"EPUB + AZW3"``), and the exact `epub_path` / `azw3_path`
+  (the AZW3 row and its "Open AZW3" button appear only when the result carries
+  an `azw3_path`). No second, UI-specific result model exists and nothing is
+  recomputed or reconstructed.
+* **Validation section.** The results section renders the result's *existing*
+  `EPUBValidationResult` (`result.validation`): "Valid" / "Invalid" from
+  `validation.valid`, warning/error counts, and the structured
+  `EPUBValidationIssue` messages as a bullet list (shown only when non-empty).
+  A result whose validation was disabled (`validation is None`) reports
+  "Not run". The UI never reruns validation — the worker still performs and
+  returns it exactly once inside `ConversionApplication.convert`.
+* **Output actions.** **Open EPUB**, **Open AZW3**, and **Open Folder** open
+  the real output paths (`result.epub_path`, `result.azw3_path`, and
+  `result.epub_path.parent`) with the OS default handler through a small
+  injectable platform seam, `kindle_converter.ui.platform.open_path`
+  (`os.startfile` on Windows, `open` on macOS, `xdg-open` elsewhere), which
+  translates platform failures into a single `PlatformOpenError`. The window
+  catches it (and `OSError`) and shows a concise status on the results section;
+  a missing retained result or a no-longer-existing output file gets its own
+  message. Opening never modifies the retained result or deletes output files.
+* **Stale-result protection.** `_clear_result()` drops the retained result and
+  hides its section whenever the current request is invalidated: a new input,
+  an output-format change, an output-directory change, and the start of a new
+  conversion all clear a previous result, so an old result is never presented
+  as the current request's. A failed conversion never shows a successful
+  result.
+* **Testability / determinism.** New headless tests drive the real QThread
+  lifecycle with an injectable fake application (as in M5.5) and replace the
+  platform opener with a recording double, asserting the exact path sent to it
+  and that failures surface locally. The platform seam itself is unit-tested
+  per platform branch with monkeypatched `sys.platform`, `os.startfile`, and
+  `subprocess.Popen` — no external program is ever launched, and the UI tests
+  never invoke EPUB validation (`"validate_epub"` does not appear in
+  `main_window.py`).
 
 ### OCR (scanned PDFs)
 
@@ -865,6 +926,17 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   the background on a `QThread` worker via `ConversionApplication.convert`)
 * [x] Conversion progress (M5.5 — indeterminate progress bar while converting,
   full on success, reset on failure)
+* [x] Results presentation (M5.6 — after success, show the real
+  `ConversionResult`: status, requested output formats, exact EPUB/AZW3
+  output paths; stale results are cleared whenever the input, options, or a new
+  conversion invalidate the request, and failures never show a result)
+* [x] Validation presentation (M5.6 — render the existing
+  `EPUBValidationResult` (valid/invalid, warning/error counts, issue
+  messages) or "Not run"; the UI never reruns validation and no second result
+  model exists)
+* [x] Output actions (M5.6 — **Open EPUB / Open AZW3 / Open Folder** open the
+  real output paths through the injectable `kindle_converter.ui.platform`
+  seam; missing outputs and platform-open failures surface locally)
 * [ ] Error reporting
 * [ ] Output directory management
 

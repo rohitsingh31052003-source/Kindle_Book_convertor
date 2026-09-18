@@ -1,4 +1,4 @@
-"""Main application window (M5.2, M5.3 input selection + PDF analysis, M5.4 options, M5.5 conversion).
+"""Main application window (M5.2, M5.3 input + analysis, M5.4 options, M5.5 conversion, M5.6 results).
 
 The :class:`MainWindow` implements the desktop workflow: select a PDF, analyze
 it, and read a summary of the analysis, then configure a conversion request
@@ -51,6 +51,23 @@ non-converting state. M5.5 implements **no** cancellation (the application
 pipeline has no cooperative-cancellation hook, so the worker cannot be safely
 stopped mid-conversion), no results screen, and no automatic output opening.
 
+M5.6 adds the post-conversion **results experience** on top of that retained
+result. After a successful conversion the window shows a dedicated results
+section rendered exclusively from the real
+:class:`~kindle_converter.application.ConversionResult`: completion status,
+output format, the EPUB output path, the AZW3 output path when generated, the
+existing :class:`~kindle_converter.epub.EPUBValidationResult` (status,
+warning/error counts, and their details), and local actions to open the
+generated outputs or their containing folder. The UI never reruns conversion
+or EPUB validation, never recomputes output paths, and never constructs its
+own result/validation copies: the application object is the sole source of
+every displayed value. Results are hidden before any successful conversion and
+are cleared whenever a new request invalidates them (new input, configuration
+change, or the start of another conversion), so a previous result is never
+presented as the current request's result. Output opening goes through a small
+injectable :func:`~kindle_converter.ui.platform.open_path` seam; failures are
+shown as a concise, local user-facing status and never crash the window.
+
 Visual polish (themes, icons, fonts, animations) is deliberately out of scope;
 this is a clean default Qt layout only.
 """
@@ -86,9 +103,11 @@ from kindle_converter.application import (
     InvalidRequestError,
     OutputFormat,
 )
+from kindle_converter.epub import EPUBValidationResult
 from kindle_converter.pdf import PDFType
 from kindle_converter.pdf.models import PDFAnalysis
 
+from .platform import PlatformOpenError, open_path
 from .worker import ConversionWorker
 
 logger = logging.getLogger(__name__)
@@ -104,6 +123,8 @@ _SUBTITLE_TEXT = "PDF \u2192 Kindle-ready ebook converter"
 _INPUT_SECTION_TEXT = "Input PDF"
 _ANALYSIS_SECTION_TEXT = "PDF Analysis"
 _CONVERSION_SECTION_TEXT = "Conversion Options"
+_RESULTS_SECTION_TEXT = "Conversion Results"
+_VALIDATION_SECTION_TEXT = "EPUB Validation"
 
 _STATUS_NO_INPUT = "Select a PDF file to begin"
 _STATUS_INPUT_SELECTED = "Ready to analyze"
@@ -123,6 +144,19 @@ _ERROR_CANNOT_READ = "The selected PDF file could not be read."
 _ERROR_INVALID_INPUT = "The selected input is not a valid PDF."
 _ERROR_ANALYSIS_FAILED = "The PDF could not be analyzed."
 _ERROR_CONVERSION_FAILED = "Conversion failed."
+
+#: Status text shown in the results section after a successful conversion.
+_RESULT_STATUS_COMPLETE = "Conversion complete"
+
+#: Validation status values for ``ConversionResult.valid``.
+_VALIDATION_VALID = "Valid"
+_VALIDATION_INVALID = "Invalid"
+_VALIDATION_NOT_RUN = "Not run"
+
+#: Output-action feedback (M5.6, kept local to the results section).
+_ACTION_NO_RESULT = "No output is available to open."
+_ACTION_OUTPUT_MISSING = "The output is no longer available: {}"
+_ACTION_OPEN_FAILED = "Could not open {}: {}"
 
 #: Placeholder shown for every analysis value until an analysis is displayed.
 _NO_VALUE = "\u2014"
@@ -196,8 +230,9 @@ class UiState(Enum):
     #: change the active request is disabled and no second conversion can start.
     CONVERTING = "converting"
     #: A conversion finished successfully; the real application-layer
-    #: ``ConversionResult`` is retained for M5.6. The configuration is intact
-    #: so another conversion can be started.
+    #: ``ConversionResult`` is retained and its results section is populated
+    #: (M5.6). The configuration is intact so another conversion can be
+    #: started.
     COMPLETED = "completed"
     #: A conversion failed; the failure is shown as a status message and the
     #: window returns to a usable non-converting state for retry.
@@ -214,14 +249,27 @@ class MainWindow(QMainWindow):
     ``ocrRequiredValue``, ``conversionSectionTitle``, ``outputFormatCombo``,
     ``outputDirectory``, ``outputDirectoryButton``, ``coverPath``,
     ``coverBrowseButton``, ``coverClearButton``, ``convertButton``,
-    ``progressBar``, ``statusLabel``) so tests and later milestones can locate
-    them without depending on layout order.
+    ``progressBar``, ``statusLabel``, ``resultsSection``,
+    ``resultsSectionTitle``, ``resultStatusValue``, ``resultFormatValue``,
+    ``epubOutputPath``, ``azw3OutputPath``, ``validationSectionTitle``,
+    ``validationStatusValue``, ``validationWarningsValue``,
+    ``validationErrorsValue``, ``validationWarningsDetails``,
+    ``validationErrorsDetails``, ``openEpubButton``, ``openAzw3Button``,
+    ``openFolderButton``, ``outputActionStatus``) so tests and later
+    milestones can locate them without depending on layout order.
 
     ``application`` is the M5.1 boundary double-callers can inject for tests;
     when omitted a real :class:`ConversionApplication` is used. The same
     instance is handed to every :class:`ConversionWorker` this window spawns,
     so in tests a deterministic fake application fully controls the background
     conversion behavior.
+
+    ``opener`` is the injectable platform-opening seam for the M5.6 output
+    actions: a callable ``opener(path: Path) -> None`` invoked to open a
+    generated file or its containing folder with the OS default handler. When
+    omitted, :func:`kindle_converter.ui.platform.open_path` is used; tests
+    inject a recording double so they can verify the exact path an action
+    would open without launching an external application.
 
     The conversion thread lifecycle is explicit: each conversion gets exactly
     one :class:`QThread` and one :class:`~kindle_converter.ui.worker.ConversionWorker`;
@@ -232,11 +280,14 @@ class MainWindow(QMainWindow):
     is never destroyed unsafely.
     """
 
-    def __init__(self, application: ConversionApplication | None = None) -> None:
+    def __init__(
+        self, application: ConversionApplication | None = None, opener=None
+    ) -> None:
         super().__init__()
         self._application = (
             application if application is not None else ConversionApplication()
         )
+        self._opener = opener if opener is not None else open_path
         self._selected_path: Path | None = None
         self._last_analysis: PDFAnalysis | None = None
         self._output_directory: Path | None = None
@@ -350,11 +401,13 @@ class MainWindow(QMainWindow):
             self._selected_path = None
             self._path_edit.clear()
             self._clear_analysis()
+            self._clear_result()
             self._apply_state(UiState.NO_INPUT)
             return
         self._selected_path = Path(path)
         self._path_edit.setText(str(self._selected_path))
         self._clear_analysis()
+        self._clear_result()
         self._apply_state(UiState.INPUT_SELECTED)
 
     # ------------------------------------------------------------------
@@ -573,7 +626,9 @@ class MainWindow(QMainWindow):
         # the worker is never garbage-collected while it is running.
         self._thread = thread
         self._worker = worker
-        self._conversion_result = None
+        # A new conversion invalidates any previous result: its presentation
+        # must not be shown as though it belonged to this request.
+        self._clear_result()
         self._conversion_error = None
         self._apply_state(UiState.CONVERTING)
         thread.start()
@@ -591,10 +646,14 @@ class MainWindow(QMainWindow):
     def _on_conversion_succeeded(self, result: ConversionResult) -> None:
         """Retain the real ``ConversionResult`` and finish the conversion.
 
-        The result is kept verbatim (never reconstructed from fields) so M5.6
-        can consume it, and the window becomes :attr:`UiState.COMPLETED`.
+        The result is kept verbatim (never reconstructed from fields) and its
+        results/validation section is populated from that exact object (M5.6);
+        no conversion or validation is rerun here. The window becomes
+        :attr:`UiState.COMPLETED`, which now corresponds to a populated
+        results presentation.
         """
         self._conversion_result = result
+        self._populate_results(result)
         self._apply_state(UiState.COMPLETED)
 
     def _on_conversion_failed(self, error: Exception) -> None:
@@ -623,6 +682,70 @@ class MainWindow(QMainWindow):
         self._worker = None
         self._thread = None
 
+    # ------------------------------------------------------------------
+    # Output actions (M5.6)
+    # ------------------------------------------------------------------
+
+    def open_epub(self) -> None:
+        """Open the generated EPUB with the OS default application.
+
+        Reads the exact ``epub_path`` from the retained real
+        :class:`~kindle_converter.application.ConversionResult`; the path is
+        never recomputed. Failures (missing output, failed platform open) are
+        shown locally in the results section and never crash the window.
+        """
+        result = self._conversion_result
+        self._open_output(result.epub_path if result is not None else None)
+
+    def open_azw3(self) -> None:
+        """Open the generated AZW3 with the OS default application.
+
+        Reads the exact ``azw3_path`` from the retained real result; a no-op
+        (with local feedback) when the current result has no AZW3 output.
+        """
+        result = self._conversion_result
+        self._open_output(result.azw3_path if result is not None else None)
+
+    def open_output_folder(self) -> None:
+        """Open the folder containing the generated outputs.
+
+        Uses the real result's directory (``epub_path.parent``), which is the
+        containing directory of every produced artifact, never a reconstructed
+        path.
+        """
+        result = self._conversion_result
+        self._open_output(
+            result.epub_path.parent if result is not None else None
+        )
+
+    def _open_output(self, path: Path | None) -> None:
+        """Open ``path`` safely, reporting failures instead of crashing.
+
+        M5.6 keeps output-action failures local to the action itself (full
+        error architecture is a later milestone): a missing result, a missing
+        output path, or a failed platform open shows a concise user-facing
+        status on the results section. The conversion result and its output
+        files are never modified.
+        """
+        if path is None:
+            self._set_output_action_status(_ACTION_NO_RESULT)
+            return
+        if not Path(path).exists():
+            self._set_output_action_status(_ACTION_OUTPUT_MISSING.format(path))
+            return
+        try:
+            self._opener(Path(path))
+        except (PlatformOpenError, OSError) as exc:
+            logger.exception("Could not open output %s", path)
+            self._set_output_action_status(_ACTION_OPEN_FAILED.format(path, exc))
+        else:
+            self._set_output_action_status("")
+
+    def _set_output_action_status(self, message: str) -> None:
+        """Show (or, with ``message == ""``, hide) the output-action status."""
+        self._output_action_status.setText(message)
+        self._output_action_status.setVisible(bool(message))
+
     def closeEvent(self, event) -> None:
         """Wait for an in-flight conversion before closing.
 
@@ -650,9 +773,15 @@ class MainWindow(QMainWindow):
         :attr:`UiState.READY` exactly when the configuration is valid, and
         :attr:`UiState.CONFIGURING` with a concrete hint otherwise. A no-op
         while a conversion is running (the active request must not change).
+
+        Because this runs on every conversion-option change, any previously
+        completed result is invalidated here: a ``ConversionResult`` is
+        associated with the conversion that produced it, never with whatever
+        configuration happens to be visible now.
         """
         if self._state is UiState.CONVERTING:
             return
+        self._clear_result()
         if self._last_analysis is None:
             return
         if self._configuration_ready():
@@ -873,6 +1002,11 @@ class MainWindow(QMainWindow):
 
         layout.addSpacing(12)
 
+        # --- Results + validation section (M5.6) ---------------------------
+        self._build_results_section(central, layout)
+
+        layout.addSpacing(12)
+
         self._status_label = QLabel(central)
         self._status_label.setObjectName("statusLabel")
         self._status_label.setWordWrap(True)
@@ -892,6 +1026,103 @@ class MainWindow(QMainWindow):
         value.setObjectName(object_name)
         form.addRow(name, value)
         return value
+
+    def _build_results_section(self, central: QWidget, layout: QVBoxLayout) -> None:
+        """Build the M5.6 results + validation presentation.
+
+        The section is hidden by default and becomes visible only when a real
+        :class:`~kindle_converter.application.ConversionResult` is rendered
+        (:meth:`_populate_results`); it is hidden again by
+        :meth:`_clear_result` whenever a new request invalidates the previous
+        result. Every widget carries a stable ``objectName`` so tests (and
+        later milestones) can locate it without depending on layout order.
+        Output paths and validation values are populated from the exact
+        application result fields -- never recomputed and never revalidated.
+        """
+        section = QWidget(central)
+        section.setObjectName("resultsSection")
+        section_layout = QVBoxLayout(section)
+        section_layout.setContentsMargins(0, 0, 0, 0)
+
+        title = QLabel(_RESULTS_SECTION_TEXT, section)
+        title.setObjectName("resultsSectionTitle")
+        section_layout.addWidget(title)
+
+        form_host = QWidget(section)
+        form = QFormLayout(form_host)
+        form.setContentsMargins(0, 0, 0, 0)
+        self._result_status_value = self._add_analysis_row(
+            form, "Status:", "resultStatusValue", form_host
+        )
+        self._result_format_value = self._add_analysis_row(
+            form, "Format:", "resultFormatValue", form_host
+        )
+        self._epub_output_value = self._add_analysis_row(
+            form, "EPUB output:", "epubOutputPath", form_host
+        )
+        self._azw3_output_label = QLabel("AZW3 output:", form_host)
+        self._azw3_output_value = QLabel(_NO_VALUE, form_host)
+        self._azw3_output_value.setObjectName("azw3OutputPath")
+        form.addRow(self._azw3_output_label, self._azw3_output_value)
+        section_layout.addWidget(form_host)
+
+        validation_title = QLabel(_VALIDATION_SECTION_TEXT, section)
+        validation_title.setObjectName("validationSectionTitle")
+        section_layout.addWidget(validation_title)
+
+        validation_form_host = QWidget(section)
+        validation_form = QFormLayout(validation_form_host)
+        validation_form.setContentsMargins(0, 0, 0, 0)
+        self._validation_status_value = self._add_analysis_row(
+            validation_form, "Status:", "validationStatusValue", validation_form_host
+        )
+        self._validation_warnings_value = self._add_analysis_row(
+            validation_form, "Warnings:", "validationWarningsValue", validation_form_host
+        )
+        self._validation_errors_value = self._add_analysis_row(
+            validation_form, "Errors:", "validationErrorsValue", validation_form_host
+        )
+        section_layout.addWidget(validation_form_host)
+
+        self._validation_warnings_details = QLabel("", section)
+        self._validation_warnings_details.setObjectName("validationWarningsDetails")
+        self._validation_warnings_details.setWordWrap(True)
+        self._validation_warnings_details.setVisible(False)
+        section_layout.addWidget(self._validation_warnings_details)
+
+        self._validation_errors_details = QLabel("", section)
+        self._validation_errors_details.setObjectName("validationErrorsDetails")
+        self._validation_errors_details.setWordWrap(True)
+        self._validation_errors_details.setVisible(False)
+        section_layout.addWidget(self._validation_errors_details)
+
+        buttons_host = QWidget(section)
+        buttons = QHBoxLayout(buttons_host)
+        buttons.setContentsMargins(0, 0, 0, 0)
+        self._open_epub_button = QPushButton("Open EPUB", buttons_host)
+        self._open_epub_button.setObjectName("openEpubButton")
+        self._open_epub_button.clicked.connect(self.open_epub)
+        buttons.addWidget(self._open_epub_button)
+        self._open_azw3_button = QPushButton("Open AZW3", buttons_host)
+        self._open_azw3_button.setObjectName("openAzw3Button")
+        self._open_azw3_button.clicked.connect(self.open_azw3)
+        buttons.addWidget(self._open_azw3_button)
+        self._open_folder_button = QPushButton("Open Folder", buttons_host)
+        self._open_folder_button.setObjectName("openFolderButton")
+        self._open_folder_button.clicked.connect(self.open_output_folder)
+        buttons.addWidget(self._open_folder_button)
+        buttons.addStretch(1)
+        section_layout.addWidget(buttons_host)
+
+        self._output_action_status = QLabel("", section)
+        self._output_action_status.setObjectName("outputActionStatus")
+        self._output_action_status.setWordWrap(True)
+        self._output_action_status.setVisible(False)
+        section_layout.addWidget(self._output_action_status)
+
+        section.setVisible(False)
+        self._results_section = section
+        layout.addWidget(section)
 
     # ------------------------------------------------------------------
     # State / display helpers
@@ -985,6 +1216,73 @@ class MainWindow(QMainWindow):
         self._mixed_pages_value.setText(_NO_VALUE)
         self._ocr_required_value.setText(_NO_VALUE)
 
+    def _clear_result(self) -> None:
+        """Drop the retained result and hide its presentation (M5.6).
+
+        Called whenever the current request is invalidated -- a new input, a
+        conversion-option change, or the start of another conversion -- so a
+        previous ``ConversionResult`` is never presented as though it belonged
+        to the current request. The output files on disk are never touched.
+        """
+        self._conversion_result = None
+        self._results_section.setVisible(False)
+
+    def _populate_results(self, result: ConversionResult) -> None:
+        """Render the real ``ConversionResult`` in the results section.
+
+        Every value is read from the application result object: the completion
+        status, the output format (from ``requested_formats``), the exact
+        ``epub_path``/``azw3_path``, and the existing
+        :class:`~kindle_converter.epub.EPUBValidationResult`. Nothing is
+        recomputed, rerun, or reconstructed, and the section becomes visible.
+        """
+        self._set_output_action_status("")
+        self._result_status_value.setText(_RESULT_STATUS_COMPLETE)
+        self._result_format_value.setText(_result_format_label(result))
+        self._epub_output_value.setText(str(result.epub_path))
+        has_azw3 = result.azw3_path is not None
+        self._azw3_output_label.setVisible(has_azw3)
+        self._azw3_output_value.setVisible(has_azw3)
+        self._azw3_output_value.setText(
+            str(result.azw3_path) if has_azw3 else _NO_VALUE
+        )
+        self._open_azw3_button.setVisible(has_azw3)
+        self._populate_validation(result.validation)
+        self._results_section.setVisible(True)
+
+    def _populate_validation(
+        self, validation: EPUBValidationResult | None
+    ) -> None:
+        """Render the existing ``EPUBValidationResult`` (never rerun).
+
+        ``validation`` is exactly the application result's ``validation``
+        field. When validation was disabled it is ``None`` and the section
+        reports "Not run"; otherwise the status, error/warning counts, and the
+        structured issue messages come straight from the result object.
+        """
+        if validation is None:
+            self._validation_status_value.setText(_VALIDATION_NOT_RUN)
+            self._validation_warnings_value.setText(_NO_VALUE)
+            self._validation_errors_value.setText(_NO_VALUE)
+            self._validation_warnings_details.setVisible(False)
+            self._validation_errors_details.setVisible(False)
+            return
+        self._validation_status_value.setText(
+            _VALIDATION_VALID if validation.valid else _VALIDATION_INVALID
+        )
+        self._validation_warnings_value.setText(str(validation.warning_count))
+        self._validation_errors_value.setText(str(validation.error_count))
+        warnings_text = "\n".join(
+            f"\u2022 {issue.message}" for issue in validation.warnings
+        )
+        errors_text = "\n".join(
+            f"\u2022 {issue.message}" for issue in validation.errors
+        )
+        self._validation_warnings_details.setText(warnings_text)
+        self._validation_warnings_details.setVisible(bool(warnings_text))
+        self._validation_errors_details.setText(errors_text)
+        self._validation_errors_details.setVisible(bool(errors_text))
+
     def _display_analysis(self, analysis: PDFAnalysis) -> None:
         """Render the existing ``PDFAnalysis`` fields in the summary form.
 
@@ -1047,3 +1345,18 @@ def _human_type(document_type: PDFType | None) -> str:
     if document_type is None:
         return "Unknown"
     return document_type.value.capitalize()
+
+
+def _result_format_label(result: ConversionResult) -> str:
+    """A deterministic, user-readable output-format label for ``result``.
+
+    Reads the request's formats from the result itself (the application
+    snapshot, never the current UI combo): EPUB always precedes AZW3 in the
+    label, producing ``"EPUB"`` or ``"EPUB + AZW3"``.
+    """
+    names = []
+    if OutputFormat.EPUB in result.requested_formats:
+        names.append("EPUB")
+    if OutputFormat.AZW3 in result.requested_formats:
+        names.append("AZW3")
+    return " + ".join(names) if names else "Unknown"
