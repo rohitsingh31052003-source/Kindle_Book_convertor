@@ -6,17 +6,17 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 4 — Kindle Output (M4.1, M4.2 and M4.3 complete)
+**Development stage:** Milestone 4 — Kindle Output (M4.1, M4.2, M4.3 and M4.4 complete)
 
 The project now has a working conversion engine with deterministic
 validation. PDF analysis, layout-aware reconstruction (reading order,
 paragraphs, headings, chapters, page-number and header/footer removal,
 metadata, images), OCR-aware processing for scanned and mixed PDFs,
-Kindle-oriented EPUB generation, structural EPUB validation, and EPUB → AZW3
-conversion (via Calibre's `ebook-convert`) are implemented and covered by a
-deterministic test suite. Cover handling (M4.4), Kindle-specific
-formatting improvements (M4.5), and a graphical interface are upcoming
-milestones.
+Kindle-oriented EPUB generation, structural EPUB validation, EPUB → AZW3
+conversion (via Calibre's `ebook-convert`), and explicit optional cover
+handling are implemented and covered by a
+deterministic test suite. Kindle-specific formatting improvements (M4.5)
+and a graphical interface are upcoming milestones.
 
 ## Goals
 
@@ -119,6 +119,7 @@ src/
     │
     ├── document/
     │   ├── models.py
+    │   ├── cover.py       # M4.4: explicit optional cover input handling
     │   ├── structure.py
     │   └── cleanup.py
     │
@@ -452,6 +453,58 @@ Key facts about the M4.3 feature:
   CALIBRE_CONVERT="C:\Program Files\Calibre2\ebook-convert.exe" pytest
   ```
 
+### Cover handling (M4.4)
+
+M4.4 adds an explicit, optional cover to the conversion path. Both entry
+points accept a keyword-only `cover` argument — a filesystem path to a
+supported image (JPEG, PNG, GIF, or SVG) or an already-loaded
+`kindle_converter.document.Image`:
+
+```python
+from kindle_converter import convert_pdf_to_epub
+from kindle_converter.document import Image
+
+# From a file — the format is sniffed from the image bytes
+convert_pdf_to_epub("book.pdf", "book.epub", cover="cover.jpg")
+
+# Or pass an in-memory image directly
+cover = Image(data=open("cover.png", "rb").read(), content_type="image/png")
+convert_pdf_to_book("book.pdf", engine, cover=cover)
+```
+
+Key facts about the M4.4 feature:
+
+* **Explicit and optional.** The cover is never auto-detected — no PDF
+  filename heuristics, no first-page analysis, no image classification.
+  A `Book` (or EPUB) without a cover renders exactly as before.
+* **Validated early.** `cover` is resolved through
+  `kindle_converter.document.load_cover` before the PDF is even opened, so a
+  missing file, unreadable path, empty data, or unsupported format fails
+  fast with a dedicated error (`CoverNotFoundError`,
+  `CoverUnreadableError`, `CoverInvalidDataError`,
+  `CoverUnsupportedFormatError`, all under `CoverError`) before any output
+  is written.
+* **Correct EPUB cover semantics** using EbookLib's supported mechanisms
+  (no post-hoc ZIP/XML patching): the image is packaged as the cover (the
+  OPF manifest marks it `properties="cover-image"` and the `name="cover"`
+  package metadata points at it), and a minimal XHTML cover page
+  (`EPUB/cover.xhtml`) reuses the project stylesheet and the reflowable
+  `img.image` profile, so the cover has no fixed dimensions.
+* **Cover page as a reading step, not a navigation entry.** The cover page
+  is the first content document in the spine, but it is deliberately *not*
+  added to the book's TOC: it produces no chapter document, no
+  `nav.xhtml` entry, and no NCX `navPoint`.
+* **Deterministic.** A given book and cover always produce the same cover
+  image name (`images/cover.<ext>`), cover page, manifest entry, metadata,
+  and spine order (`nav`, `cover`, chapters).
+* **Validated output.** A covered EPUB passes the M4.2 structural validator
+  (`validate_epub`), and the optional Calibre integration suite also
+  converts a covered EPUB to AZW3.
+
+```text
+Book → build_epub() → EPUB (cover: properties="cover-image" + name="cover" + cover.xhtml)
+```
+
 ### Building the package
 
 ```bash
@@ -553,7 +606,8 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   artifacts through `kindle_converter.epub.validate_epub`)
 * [x] AZW3 conversion (M4.3 — explicit EPUB → AZW3 step through Calibre's
   optional external `ebook-convert` tool)
-* [ ] Cover handling
+* [x] Cover handling (M4.4 — explicit, optional cover: validated input,
+  `cover-image`/`name="cover"` EPUB semantics, reflowable cover page)
 * [ ] Kindle-specific formatting improvements
 
 ### Milestone 5 — User Interface

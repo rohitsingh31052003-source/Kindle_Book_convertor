@@ -24,6 +24,14 @@ automatically after EPUB generation. Full detail -- the validation guarantee
 (artifact existence plus non-empty, *not* Kindle rendering correctness) and
 the determinism contract (command construction only, not AZW3 bytes) -- is
 documented in :mod:`kindle_converter.epub.azw3`.
+
+M4.4 adds explicit, optional cover output to
+:func:`kindle_converter.epub.builder.build_epub`: a ``Book.cover``
+(:class:`~kindle_converter.document.models.Image`) is rendered as the EPUB
+cover image (``properties="cover-image"`` + ``name="cover"`` metadata) and a
+minimal reflowable cover page ahead of the content in the spine. The cover is
+never inferred from anything, never added to the navigation, and books
+without a cover are unchanged.
 """
 
 from .azw3 import (

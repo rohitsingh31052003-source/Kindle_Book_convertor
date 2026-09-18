@@ -38,9 +38,19 @@ never a PDF or ``Book`` -- and is deliberately not chained into
     >>> from kindle_converter.epub import convert_epub_to_azw3
     >>> convert_epub_to_azw3("book.epub", "book.azw3")
 
-Formal EPUB validation (M4.2) and EPUB -> AZW3 conversion (M4.3) are
-implemented; cover handling (M4.4) and Kindle-specific formatting
-improvements (M4.5) are not implemented yet.
+M4.4 adds explicit, optional cover handling: both entry points accept a
+keyword-only ``cover`` -- a path to a supported image (JPEG, PNG, GIF, or
+SVG) or an already-loaded
+:class:`~kindle_converter.document.models.Image`. The cover is validated
+before any PDF work runs and is rendered as the EPUB's cover (image +
+``name="cover"`` metadata + a reflowable cover page). Covers are never
+auto-detected; without one the output is exactly as before:
+
+    >>> convert_pdf_to_epub("book.pdf", "book.epub", cover="cover.jpg")
+
+Formal EPUB validation (M4.2), EPUB -> AZW3 conversion (M4.3), and cover
+handling (M4.4) are implemented; Kindle-specific formatting improvements
+(M4.5) are not implemented yet.
 """
 
 from .pipeline import convert_pdf_to_book, convert_pdf_to_epub

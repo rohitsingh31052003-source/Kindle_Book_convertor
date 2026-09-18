@@ -27,6 +27,19 @@ chapter order, block order, resource names, TOC, and CSS. The only
 non-logical variation is EbookLib's own container metadata (a
 ``dcterms:modified`` timestamp and ZIP entry times); that library detail is
 accepted and documented rather than fought.
+
+Cover handling (M4.4) is explicit and optional
+----------------------------------------------
+An optional ``Book.cover`` (:class:`~kindle_converter.document.models.Image`)
+becomes an EPUB cover using EbookLib's dedicated cover mechanism: the image
+is packaged as an ``EpubCover`` (so the OPF manifest marks it
+``properties="cover-image"`` and the ``name="cover"`` package metadata points
+at it), and a minimal XHTML cover page (:file:`cover.xhtml`) reuses the
+project stylesheet and precedes the content in the spine. The cover never
+joins the book's ``toc``, so it becomes no chapter, no table-of-contents
+entry, and no NCX ``navPoint``; the spine is the only place that references
+it. A ``Book`` without a cover produces byte-for-byte the same output as
+before.
 """
 
 from __future__ import annotations
@@ -90,6 +103,24 @@ DEFAULT_TITLE = "Untitled Book"
 
 #: Base name of the book-wide stylesheet resource.
 STYLESHEET_RESOURCE = "style.css"
+
+#: Deterministic base name of the packaged cover image (M4.4); the format
+#: extension is appended from the cover's resolved media type
+#: (``images/cover.jpg`` for a JPEG cover, and so on).
+COVER_IMAGE_RESOURCE = "images/cover"
+
+#: Manifest id of the cover image, referenced by the ``name="cover"``
+#: package metadata.
+COVER_IMAGE_ID = "cover-img"
+
+#: Deterministic id and file name of the cover XHTML document.
+COVER_PAGE_ID = "cover"
+COVER_PAGE_FILE = "cover.xhtml"
+
+#: The neutral, deterministic title and alt text of the cover page. Not
+#: bibliographic metadata -- just the literal word used to describe the
+#: front-cover image in the package document.
+COVER_TITLE = "Cover"
 
 
 class EPUBGenerationError(Exception):
@@ -177,6 +208,8 @@ def _build_epub_book(book: Book, language: str | None) -> epub.EpubBook:
     epub_book.set_identifier(
         book.metadata.identifier or book.metadata.title or "book"
     )
+    if book.cover is not None:
+        _add_cover(epub_book, book.cover)
 
     stylesheet = epub.EpubItem(
         uid="stylesheet",
@@ -220,8 +253,52 @@ def _build_epub_book(book: Book, language: str | None) -> epub.EpubBook:
     epub_book.toc = chapters
     epub_book.add_item(epub.EpubNcx())
     epub_book.add_item(epub.EpubNav())
-    epub_book.spine = ["nav", *chapters]
+    if book.cover is not None:
+        epub_book.spine = ["nav", COVER_PAGE_ID, *chapters]
+    else:
+        epub_book.spine = ["nav", *chapters]
     return epub_book
+
+
+def _add_cover(epub_book: epub.EpubBook, cover: Image) -> None:
+    """Register the book cover with EbookLib's dedicated cover mechanism.
+
+    The image is packaged as an :class:`ebooklib.epub.EpubCover`, so the OPF
+    manifest marks it ``properties="cover-image"`` and the ``name="cover"``
+    package metadata points at its manifest id -- the EPUB cover semantics
+    readers recognize. A minimal XHTML cover page (:file:`cover.xhtml`)
+    reuses the project stylesheet and ``img.image`` rendering profile, so the
+    cover stays reflowable like the content it precedes.
+
+    The cover is deliberately *not* added to ``book.toc``, so it never
+    becomes a chapter, a table-of-contents entry, or an NCX ``navPoint``: the
+    spine is the only place that references it, exactly as an EPUB cover page
+    is supposed to appear. The packaged image keeps the exact bytes and media
+    type of ``cover``.
+    """
+    media_type = _resolve_content_type(cover)
+    extension = _CONTENT_TYPE_EXTENSIONS.get(media_type, "img")
+    resource_name = f"{COVER_IMAGE_RESOURCE}.{extension}"
+
+    image_item = epub.EpubCover(uid=COVER_IMAGE_ID, file_name=resource_name)
+    image_item.media_type = media_type
+    image_item.content = cover.data
+    epub_book.add_item(image_item)
+
+    page_item = epub.EpubHtml(
+        uid=COVER_PAGE_ID, file_name=COVER_PAGE_FILE, title=COVER_TITLE
+    )
+    page_item.content = (
+        f'<img class="image" src="{resource_name}" alt="{_escape(COVER_TITLE)}" />'
+    )
+    page_item.add_link(
+        href=STYLESHEET_RESOURCE, rel="stylesheet", type="text/css"
+    )
+    epub_book.add_item(page_item)
+
+    epub_book.add_metadata(
+        None, "meta", "", {"name": "cover", "content": COVER_IMAGE_ID}
+    )
 
 
 def _add_metadata(

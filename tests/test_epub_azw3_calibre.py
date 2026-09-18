@@ -26,7 +26,13 @@ from pathlib import Path
 
 import pytest
 
-from kindle_converter.document import Book, BookMetadata, Chapter, Paragraph
+from kindle_converter.document import (
+    Book,
+    BookMetadata,
+    Chapter,
+    Image,
+    Paragraph,
+)
 from kindle_converter.epub import (
     AZW3BackendUnavailableError,
     build_epub,
@@ -92,6 +98,45 @@ class TestCalibreIntegration:
         assert destination.is_file()
         assert destination.stat().st_size > 0
         assert result.source == synthetic_epub
+        assert result.destination == destination
+
+    def test_covered_epub_to_azw3_produces_nonempty_output(
+        self, calibre_exe: str, tmp_path: Path
+    ) -> None:
+        # M4.4: a covered EPUB (cover image, cover page, name="cover"
+        # metadata, cover-image manifest property) must survive the kind
+        # of conversion the pipeline produces just as a coverless one does.
+        source = tmp_path / "covered.epub"
+        book = Book(
+            metadata=BookMetadata(title="Covered Calibre Fixture"),
+            chapters=[
+                Chapter(
+                    title="Chapter 1",
+                    blocks=[
+                        Paragraph(
+                            text=(
+                                "Deterministic synthetic covered EPUB for the "
+                                "optional M4.4 Calibre integration test."
+                            )
+                        )
+                    ],
+                )
+            ],
+        )
+        book.cover = Image(
+            data=b"\x89PNG\r\n\x1a\n\x00\x01\x02\x03",
+            content_type="image/png",
+        )
+        build_epub(book, source)
+
+        destination = tmp_path / "covered.azw3"
+        result = convert_epub_to_azw3(
+            source, destination, calibre_path=calibre_exe
+        )
+        assert destination.exists()
+        assert destination.is_file()
+        assert destination.stat().st_size > 0
+        assert result.source == source
         assert result.destination == destination
 
     def test_missing_calibre_path_raises_project_error(

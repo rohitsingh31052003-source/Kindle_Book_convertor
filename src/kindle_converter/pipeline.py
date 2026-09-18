@@ -25,6 +25,13 @@ the existing public API:
 The EPUB layer only ever sees a ``Book``: no PDF, OCR, routing, or
 reconstruction type crosses that boundary, and no PDF/OCR-specific logic
 lives in the EPUB modules.
+
+M4.4 adds an optional, keyword-only ``cover`` to both entry points: a
+filesystem path or an in-memory
+:class:`~kindle_converter.document.models.Image`, resolved and validated
+explicitly through :func:`kindle_converter.document.load_cover` before any
+PDF work runs. Covers are never auto-detected; without one, the book (and
+its EPUB) is exactly as before.
 """
 
 from __future__ import annotations
@@ -33,7 +40,7 @@ import os
 
 import pymupdf
 
-from .document import Book
+from .document import Book, Image, load_cover
 from .epub import build_epub
 from .pdf import PDFReadError, analyze_pdf, extract_pdf_images
 from .pdf.layout import extract_page_layout
@@ -73,6 +80,7 @@ def convert_pdf_to_epub(
     engine: OCREngine | None = None,
     renderer: PageRenderer | None = None,
     dpi: int | float = DEFAULT_RENDER_DPI,
+    cover: Image | PathLike | None = None,
 ) -> None:
     """Convert any PDF into a reflowable EPUB and write it to ``output``.
 
@@ -112,6 +120,13 @@ def convert_pdf_to_epub(
         deterministic rendering tests.
     dpi:
         Rendering resolution for OCR pages (validated eagerly).
+    cover:
+        Optional cover for the generated EPUB (M4.4): a filesystem path to a
+        supported image (JPEG, PNG, GIF, or SVG) or an already-loaded
+        :class:`~kindle_converter.document.models.Image`. Validated through
+        :func:`kindle_converter.document.load_cover` before the PDF is even
+        opened, so a bad cover fails fast and no output is written. When
+        ``None`` (default) the EPUB has no cover, exactly as before.
 
     Returns
     -------
@@ -119,6 +134,9 @@ def convert_pdf_to_epub(
 
     Raises
     ------
+    CoverError (subclasses)
+        If ``cover`` is invalid: a missing or unreadable file, an unsupported
+        format, or empty data.
     PDFReadError
         If ``source`` is not a readable PDF (missing or malformed file).
     EmptyPDFError
@@ -142,9 +160,14 @@ def convert_pdf_to_epub(
     --------
     >>> convert_pdf_to_epub("book.pdf", "book.epub")
     >>> convert_pdf_to_epub("scan.pdf", "scan.epub", engine=TesseractEngine())
+    >>> convert_pdf_to_epub("book.pdf", "book.epub", cover="cover.jpg")
     """
     book = convert_pdf_to_book(
-        source, _resolve_engine(engine), renderer=renderer, dpi=dpi
+        source,
+        _resolve_engine(engine),
+        renderer=renderer,
+        dpi=dpi,
+        cover=cover,
     )
     build_epub(book, output)
 
@@ -155,6 +178,7 @@ def convert_pdf_to_book(
     *,
     renderer: PageRenderer | None = None,
     dpi: int | float = DEFAULT_RENDER_DPI,
+    cover: Image | PathLike | None = None,
 ) -> Book:
     """Convert a PDF into a document-model ``Book``, OCR-aware (Milestone 3.6).
 
@@ -191,17 +215,29 @@ def convert_pdf_to_book(
         deterministic rendering tests.
     dpi:
         Rendering resolution for OCR pages (validated eagerly).
+    cover:
+        Optional cover image for the returned ``Book`` (M4.4): a filesystem
+        path to a supported image (JPEG, PNG, GIF, or SVG) or an already-loaded
+        :class:`~kindle_converter.document.models.Image`. Resolved and
+        validated through :func:`kindle_converter.document.load_cover` before
+        the PDF is even opened, so a bad cover fails fast and no extraction
+        work is wasted. When ``None`` (default) the returned ``Book`` has no
+        cover, exactly as before.
 
     Returns
     -------
     Book
         A document-model book: one chapter, ``PageBreak`` per page boundary,
         native headings at the generic heading level, OCR-derived body
-        paragraphs for scanned/mixed pages, and the PDF's embedded images
-        (M2.13) at their reconstructed document positions.
+        paragraphs for scanned/mixed pages, the PDF's embedded images
+        (M2.13) at their reconstructed document positions, and the validated
+        ``cover`` (when one was supplied) on ``Book.cover``.
 
     Raises
     ------
+    CoverError (subclasses)
+        If ``cover`` is invalid: a missing or unreadable file, an unsupported
+        format, or empty data.
     TypeError
         If ``engine`` is not an ``OCREngine``, ``renderer`` is not callable.
     ValueError
@@ -221,6 +257,7 @@ def convert_pdf_to_book(
     >>> book.chapters[0].blocks[0]
     Paragraph(text='...')  # OCR-derived body text
     """
+    resolved_cover = load_cover(cover) if cover is not None else None
     doc = _open_document(source)
     try:
         analysis = analyze_pdf(doc)
@@ -241,7 +278,9 @@ def convert_pdf_to_book(
             results, layout=layout, images=images
         )
         metadata = extract_pdf_metadata(doc)
-        return reconstructed_document_to_book(document, metadata)
+        book = reconstructed_document_to_book(document, metadata)
+        book.cover = resolved_cover
+        return book
     finally:
         _close_if_owned(source, doc)
 
