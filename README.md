@@ -6,65 +6,54 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 5 — User Interface (M5.7 — Errors + Temporary Files complete)
+**Development stage:** Milestone 5 — User Interface (complete; M5.9 — Documentation + M5 Closure — complete)
 
-The project has a working conversion engine with deterministic
-validation. PDF analysis, layout-aware reconstruction (reading order,
-paragraphs, headings, chapters, page-number and header/footer removal,
-metadata, images), OCR-aware processing for scanned and mixed PDFs,
+The repository is at the end of **Milestone 5**. Every M5 sub-milestone, M5.1
+through M5.9, is implemented and complete:
+
+* **M5.1** — Application / pipeline API (`kindle_converter.application`):
+  the stable, UI-independent conversion use case (`ConversionApplication.convert`,
+  `analyze_pdf`, `validate_request`) with typed `ConversionRequest`,
+  `ConversionResult`, progress events, and an application-level error
+  boundary.
+* **M5.2** — PySide6 application foundation: the optional `ui` extra
+  (`kindle_converter.ui`) with a launchable main window and the
+  `python -m kindle_converter.ui` entry point.
+* **M5.3** — Input + PDF analysis: select a PDF, analyze it through the
+  application API, and view the M3.1 analysis summary.
+* **M5.4** — Conversion options + cover: output format (EPUB/AZW3), output
+  directory, optional cover, and construction of the real `ConversionRequest`
+  with an explicit readiness model. No conversion execution yet.
+* **M5.5** — Background conversion + progress: convert through
+  `ConversionApplication.convert` on a dedicated `QThread` worker, reporting
+  stage progress over Qt signals while the GUI stays responsive.
+* **M5.6** — Results + validation: results rendered exclusively from the real
+  `ConversionResult`, including the existing `EPUBValidationResult`, plus
+  Open EPUB / Open AZW3 / Open Folder output actions.
+* **M5.7** — Errors + temporary files: an application-owned temporary
+  workspace per conversion with deterministic cleanup, and application-level
+  error handling (`ApplicationError` subclasses including `WorkspaceError`).
+* **M5.8** — UI / integration testing: headless PySide6 integration tests
+  covering the complete desktop workflow, following the repository's
+  PySide6-optional skip convention.
+* **M5.9** — Documentation + M5 closure: this README reconciled with the
+  implemented M5 state (desktop workflow, PDF classifications, conversion
+  options, results/validation, background conversion, temporary workspace,
+  error handling, installation, testing, license, and the M5 acceptance
+  checklist below).
+
+The desktop application is an optional layer on top of a complete engine
+(Milestones 1–4): deterministic PDF analysis, layout-aware reconstruction
+(reading order, paragraphs, headings, chapters, page-number and header/footer
+removal, metadata, images), OCR-aware processing for scanned and mixed PDFs,
 Kindle-oriented EPUB generation, structural EPUB validation, EPUB → AZW3
-conversion (via Calibre's `ebook-convert`), explicit optional cover
-handling, and Kindle-specific reflowable formatting improvements are
-implemented and covered by a deterministic test suite. The UI-independent
-application / pipeline API (M5.1, `kindle_converter.application`) wraps
-the conversion use case behind a stable boundary for the graphical
-interface. M5.2 added the optional PySide6 desktop application shell
-(`kindle_converter.ui`, the `ui` extra): a launchable main window and
-entry point (`python -m kindle_converter.ui`). M5.3 implements the first
-real desktop workflow on top of that shell: the window can select a PDF
-from a file picker, analyze it through the application API (never by
-reading the PDF itself and never by calling the pipeline directly), and
-display a useful summary (page count, document type, text/scanned/mixed
-page counts, OCR requirement) with explicit UI states and clean
-validation/error handling. M5.4 adds the configuration step between
-analysis and conversion: after analyzing a PDF, the user picks an output
-format (EPUB or AZW3), an output directory, and an optional cover, and
-the window summarizes the result into a real application-layer
-`ConversionRequest`, tracking an explicit readiness model
-(not configured → configuring → ready for conversion). M5.4 performs **no
-conversion**: request construction and readiness validation are
-synchronous, non-executing, and worker-free; ``ConversionApplication.convert``
-is never invoked from normal UI interaction. Conversion execution (progress,
-output, results) is deliberately deferred to M5.5; M5.4 ends
-configured-and-ready. M5.5 completes the desktop workflow: clicking **Convert**
-runs the configured `ConversionRequest` through
-`ConversionApplication.convert` **in the background** on a dedicated
-`QThread` worker (no cancellation in M5.5) so the window stays responsive.
-The worker reports stage-level progress and the final result (or failure) back to
-the window through Qt queued signals; the UI reflects it with three new
-`UiState` values (converting → completed / conversion failed), a progress bar
-(indeterminate while converting, full on success, reset on failure), status
-messages, and last-result/last-error accessors. The window can never be closed
-while a conversion is in flight — `closeEvent` waits for the running conversion
-to finish safely. The UI remains a thin presentation layer: the worker (and
-thus conversion) still only ever calls the M5.1 application API, and the core
-library never imports PySide6.
+conversion (via Calibre's `ebook-convert`), explicit optional cover handling,
+and Kindle-specific reflowable formatting improvements — all covered by a
+deterministic test suite.
 
-M5.7 adds an application-owned temporary workspace for every conversion.
-Each call to `ConversionApplication.convert` creates an isolated temporary
-directory (via `tempfile.TemporaryDirectory`) that exists only for the
-lifetime of that conversion: it is created on entry and deterministically
-cleaned up on exit -- successfully, or on any failure path (expected
-application errors, validation failures, unexpected exceptions). The
-workspace is owned by the application/conversion layer, never by the GUI
-or the worker. Its ``path`` attribute is exposed to application code that
-needs intermediate artifacts. The workspace is deliberately **not** the
-user's selected output directory: final artifacts (EPUB, AZW3) live in
-the output directory the user chose, and workspace cleanup never touches
-that directory. A workspace creation failure raises
-:class:`kindle_converter.application.errors.WorkspaceError` (an
-:class:`ApplicationError` subclass); a cleanup failure is logged as a
-warning but never replaces the original conversion failure.
+The core library never imports PySide6, and the UI talks to the core only
+through the M5.1 application API. **Milestone 6** (quality and distribution)
+has **not** started.
 
 ## Goals
 
@@ -180,7 +169,7 @@ src/
     │   ├── azw3.py        # M4.3: EPUB → AZW3 conversion API
     │   └── calibre.py     # M4.3: Calibre ebook-convert backend
     │
-    ├──     application/       # M5.1: UI-independent conversion use case
+    ├── application/           # M5.1: UI-independent conversion use case
     │   ├── converter.py   # ConversionApplication: analyze_pdf (M5.3) / validate_request (M5.4) / convert
     │   ├── request.py     # ConversionRequest / OutputFormat
     │   ├── result.py      # ConversionResult
@@ -295,7 +284,18 @@ pytest
 For full development setup (including the runtime dependencies), use the
 editable install described above.
 
-### Desktop UI (M5.2 shell, M5.3 input selection + analysis, M5.4 conversion options, M5.5 background conversion, M5.6 results + validation)
+The repository contains dedicated PySide6 UI tests, including the M5.8
+integration suite (`tests/test_ui_integration.py`) that drives the complete
+desktop workflow (input selection → analysis → conversion options → background
+conversion → results/validation → output actions) across the MainWindow →
+ConversionWorker → ConversionApplication → pipeline boundary. UI tests run
+headless (`QT_QPA_PLATFORM=offscreen`) and, following the repository's
+long-standing convention, **skip cleanly when PySide6 (the `ui` extra) is not
+installed** — the core suite never requires it. The optional Calibre
+(`tests/test_epub_azw3_calibre.py`) and Tesseract (`tests/test_pdf_ocr_tesseract.py`)
+integration tests likewise skip when those external tools are unavailable.
+
+### Desktop UI (M5.2–M5.9, the complete desktop workflow)
 
 The desktop application is a PySide6 UI (`kindle_converter.ui`). PySide6 is an
 **optional** dependency (the `ui` extra): the core library never imports it,
@@ -312,6 +312,49 @@ Launch the desktop application:
 ```bash
 python -m kindle_converter.ui
 ```
+
+**Desktop workflow.** The implemented desktop workflow is:
+
+```text
+Select PDF
+    ↓
+Analyze PDF
+    ↓
+Configure output and optional cover
+    ↓
+Start conversion
+    ↓
+Background conversion (application layer, off the GUI thread)
+    ↓
+EPUB validation
+    ↓
+Results and output actions
+```
+
+The order of steps is fixed: **a PDF is analyzed before any conversion
+configuration is made available**, and conversion is always executed through
+the M5.1 application layer (`ConversionApplication.convert`) on a background
+`QThread` — the window never parses the PDF itself, never calls the pipeline
+directly, and never runs conversion on the GUI thread.
+
+**Supported document types.** PDF analysis classifies a document as one of
+three types (M3.1), and the unified M4.1 pipeline converts **all three** to
+EPUB (and optionally AZW3):
+
+* **TEXT** — meaningful text on essentially all pages. Native layout-aware
+  reconstruction; no OCR involved.
+* **SCANNED** — little or no meaningful text; pages are primarily images.
+  Pages are rendered, OCR'd, and cleaned before structural reconstruction.
+* **MIXED** — a substantial mixture of text pages and image-based pages.
+  Text pages use native extraction; image pages are OCR'd; the two text
+  streams stay separate in the resulting `Book` (never merged).
+
+OCR is only required for SCANNED and MIXED documents (the `ocr` extra plus an
+external Tesseract executable); TEXT-only conversion never touches OCR. EPUB
+and AZW3 generation behave identically for every classification: the same
+`Book` is built, the EPUB is produced and (by default) structurally validated,
+and when AZW3 is selected the emitted EPUB is the input to the M4.3
+EPUB → AZW3 step.
 
 M5.3 implements the first desktop workflow: select a PDF with the file picker,
 see the selected path, run **Analyze PDF**, and read a summary of the M3.1
@@ -435,6 +478,40 @@ completed conversion:
   as the current request's. A failed conversion never shows a successful
   result.
 
+M5.7 adds application-level **error handling** and a **temporary workspace** for
+every conversion:
+
+* **Error model.** Failures are divided into two groups:
+  * **Expected application-level conversion failures** — an invalid request,
+    a required stage that could not run, an output that could not be written,
+    an EPUB that failed structural validation, a failed optional AZW3 step, or
+    a temporary workspace that could not be created. Each is a
+    `kindle_converter.application.ApplicationError` subclass
+    (`InvalidRequestError`, `ConversionFailedError`, `OutputError`,
+    `ValidationFailedError`, `AZW3OutputError`, `WorkspaceError`) chained to its
+    underlying cause, and the UI displays these messages verbatim as
+    user-readable status text while returning the window to a usable state for
+    a retry.
+  * **Unexpected failures** — anything else (a programming error). The worker
+    logs these with their traceback and the UI shows a concise generic message;
+    they are never misreported as a successful conversion or as a recoverable
+    application error.
+
+  Not every possible failure is recovered automatically — the application
+  reports what went wrong instead, without ever losing the underlying cause.
+* **Temporary workspace.** Each call to `ConversionApplication.convert`
+  creates an application-owned temporary workspace (a
+  `tempfile.TemporaryDirectory`) that exists only for the lifetime of that
+  conversion: it is created on entry and deterministically cleaned up on exit
+  — successfully, **or on any failure path** (expected application errors,
+  validation failures, unexpected exceptions). The workspace is owned by the
+  application/conversion layer, never by the GUI or the worker, and it is
+  deliberately **not** the user's selected output directory: final EPUB/AZW3
+  outputs always remain in the directory the user chose, and workspace cleanup
+  never touches it. A workspace-creation failure raises `WorkspaceError`
+  before any conversion work starts; a cleanup failure is logged as a warning
+  and never replaces the original conversion failure.
+
 M5.8 adds **integration tests** verifying the complete desktop workflow across
 the established application boundary (MainWindow → ConversionWorker →
 ConversionApplication → pipeline). These tests cover the happy path, all three
@@ -454,6 +531,49 @@ protection, and UI state transitions. All tests run headless via
   `subprocess.Popen` — no external program is ever launched, and the UI tests
   never invoke EPUB validation (`"validate_epub"` does not appear in
   `main_window.py`).
+
+M5.9 is the **documentation and M5 closure** milestone. This README describes
+the implemented M5 state — project status, roadmap, desktop workflow, PDF
+classifications, conversion options, results/validation, background
+conversion, temporary workspace and error handling, installation, testing, and
+license — and records the M5 acceptance checklist below. No Milestone 6 work
+has started.
+
+### M5 acceptance checklist
+
+Milestone 5 is complete; it delivers:
+
+* [x] application / pipeline API (M5.1 `kindle_converter.application`)
+* [x] PySide6 desktop application (M5.2, optional `ui` extra)
+* [x] PDF input and analysis (M5.3; the window analyzes through the
+  application API, never by parsing the PDF itself)
+* [x] TEXT / SCANNED / MIXED classification handling (M3.1 analysis in the
+  UI; the unified M4.1 pipeline converts all three)
+* [x] EPUB / AZW3 output selection (M5.4; an EPUB is always produced, AZW3 is
+  an additional artifact converted from the EPUB)
+* [x] optional cover (M5.4; loaded and validated by the application layer,
+  M4.4)
+* [x] configurable output directory (M5.4; outputs remain in the user-selected
+  directory)
+* [x] background conversion (M5.5, dedicated `QThread`; GUI stays responsive)
+* [x] progress reporting (M5.5, stage-level via the application callback;
+  indeterminate bar, no fabricated percentage)
+* [x] EPUB validation / results (M5.6; rendered from the real
+  `ConversionResult` / `EPUBValidationResult`, never rerun)
+* [x] output-opening actions (M5.6; Open EPUB / Open AZW3 / Open Folder)
+* [x] application-level error handling (M5.7; expected failures are
+  user-facing, unexpected failures are logged)
+* [x] temporary workspace cleanup (M5.7; per-conversion, deterministic on
+  every path)
+* [x] UI / integration test coverage (M5.8; headless, skipped when PySide6 is
+  unavailable)
+* [x] documentation (M5.9; this README)
+
+Remaining/future capabilities (not implemented in M5): **drag-and-drop**
+input (input is selected through the file picker), conversion **cancellation**
+(a running conversion finishes rather than being stopped), and all Milestone 6
+work (representative test corpus, regression and quality measurement,
+performance, Windows packaging, and release preparation).
 
 ### OCR (scanned PDFs)
 
@@ -869,11 +989,6 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 * [x] Implement basic text extraction
 * [x] Implement initial EPUB generation
 * [x] Create an end-to-end PDF → EPUB pipeline
-* [x] Create document domain model
-* [x] Implement PDF type analysis
-* [x] Implement basic text extraction
-* [x] Implement initial EPUB generation
-* [x] Create an end-to-end PDF → EPUB pipeline
 
 ### Milestone 2 — Book Reconstruction
 
@@ -918,21 +1033,24 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   analysis, EPUB generation, validation, and optional AZW3; typed
   `ConversionRequest`, `ConversionResult`, progress callback, and
   application error boundary)
-* [x] PySide6 application shell (M5.2 — optional `ui` extra,
+* [x] Simple desktop interface (M5.2 — optional `ui` extra,
   `kindle_converter.ui` main window + entry point; no conversion workflow yet)
 * [x] Input selection + PDF analysis UI (M5.3 — select a PDF, analyze it
   through `ConversionApplication.analyze_pdf`, display the M3.1 analysis
   summary; explicit UI states and clean validation/error handling; no
   conversion yet)
+* [x] Output format selection (M5.4 — the EPUB/AZW3 output-format combo maps
+  to the application-layer `OutputFormat` enum; per the application contract
+  an EPUB is always produced and AZW3 is an additional artifact)
+* [x] Output directory management (M5.4 — native directory picker; nothing is
+  created on disk just by selecting it, and M5.6's **Open Folder** action
+  opens the real containing directory of the produced outputs)
 * [x] Conversion options + cover handling UI (M5.4 — output format EPUB/AZW3,
   output directory picker, optional cover selection, and construction of the
   real application-layer `ConversionRequest` via
   `MainWindow.build_conversion_request`; explicit `UiState` readiness
   (configuring → ready for conversion) gated by the new non-executing
   `ConversionApplication.validate_request`; no conversion execution yet)
-* [ ] Simple desktop interface
-* [ ] Drag-and-drop input
-* [ ] Output format selection
 * [x] Conversion execution (M5.5 — run the configured `ConversionRequest` in
   the background on a `QThread` worker via `ConversionApplication.convert`)
 * [x] Conversion progress (M5.5 — indeterminate progress bar while converting,
@@ -948,6 +1066,10 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 * [x] Output actions (M5.6 — **Open EPUB / Open AZW3 / Open Folder** open the
   real output paths through the injectable `kindle_converter.ui.platform`
   seam; missing outputs and platform-open failures surface locally)
+* [x] Error reporting (M5.7 — expected application-level conversion failures
+  surface as user-readable status messages; unexpected errors are logged with
+  their traceback and shown as a concise generic message; the window stays
+  usable for retry)
 * [x] Errors + Temporary Files (M5.7 — application-owned temporary workspace
   for every conversion: creation on entry, deterministic cleanup on exit,
   `WorkspaceError` for creation failures, cleanup failures logged but never
@@ -958,8 +1080,13 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   configuration, background conversion, thread/UI boundary, results/validation,
   output actions, error paths, workspace cleanup, stale-result protection, and
   state transitions)
-* [ ] Error reporting
-* [ ] Output directory management
+* [x] Documentation + M5 Closure (M5.9 — this README reconciled with the
+  implemented M5 state: project status, roadmap, desktop workflow, PDF
+  classifications, conversion options, validation/results, background
+  conversion, temporary workspace and cleanup, error handling, installation,
+  testing, license, and the M5 acceptance checklist)
+* [ ] Drag-and-drop input (future work — not implemented in M5; the desktop
+  workflow selects input through the file picker)
 
 ### Milestone 6 — Quality and Distribution
 
@@ -988,4 +1115,6 @@ Conversion quality is therefore more important than simply completing the file-f
 
 ## License
 
-License to be determined during the initial project setup.
+The project is **proprietary** (all rights reserved). The package metadata in
+`pyproject.toml` declares `license = { text = "Proprietary" }`; there is no
+separate `LICENSE` file in the repository at this time.
