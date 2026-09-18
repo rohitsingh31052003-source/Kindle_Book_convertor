@@ -405,8 +405,8 @@ M5.6 adds **results + validation presentation** and **output actions** to the
 completed conversion:
 
 * **Results section.** After a conversion succeeds, a results section becomes
-  visible under the progress bar. It is populated only from the real M5.1
-  `ConversionResult` retained on the window: a completion status, an output
+  visible under the progress bar. It is populated only from the real
+  :class:`ConversionResult` retained on the window: a completion status, an output
   format label derived from the request's `requested_formats` (always
   ``"EPUB"`` or ``"EPUB + AZW3"``), and the exact `epub_path` / `azw3_path`
   (the AZW3 row and its "Open AZW3" button appear only when the result carries
@@ -434,6 +434,18 @@ completed conversion:
   conversion all clear a previous result, so an old result is never presented
   as the current request's. A failed conversion never shows a successful
   result.
+
+M5.8 adds **integration tests** verifying the complete desktop workflow across
+the established application boundary (MainWindow → ConversionWorker →
+ConversionApplication → pipeline). These tests cover the happy path, all three
+document types (TEXT, SCANNED, MIXED), output configuration (EPUB, AZW3, cover),
+background conversion and thread/UI boundary, results and validation
+presentation, output-opening actions, error paths (invalid input, analysis
+failure, conversion failure, validation failure, workspace failure, unexpected
+exception, AZW3 failure after EPUB succeeds), workspace cleanup, stale-result
+protection, and UI state transitions. All tests run headless via
+``QT_QPA_PLATFORM=offscreen`` and skip cleanly when PySide6 is unavailable
+(the ``ui`` extra is absent). See ``tests/test_ui_integration.py``.
 * **Testability / determinism.** New headless tests drive the real QThread
   lifecycle with an injectable fake application (as in M5.5) and replace the
   platform opener with a recording double, asserting the exact path sent to it
@@ -940,6 +952,12 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   for every conversion: creation on entry, deterministic cleanup on exit,
   `WorkspaceError` for creation failures, cleanup failures logged but never
   replacing the original conversion failure)
+* [x] UI/Integration Testing (M5.8 — integration tests verifying the complete
+  desktop workflow across the MainWindow → ConversionWorker → ConversionApplication
+  → pipeline boundary: happy path, TEXT/SCANNED/MIXED document types, output
+  configuration, background conversion, thread/UI boundary, results/validation,
+  output actions, error paths, workspace cleanup, stale-result protection, and
+  state transitions)
 * [ ] Error reporting
 * [ ] Output directory management
 
