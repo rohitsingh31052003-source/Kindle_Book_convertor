@@ -28,9 +28,19 @@ The lower-level stages remain available for callers that need them:
 finished EPUB artifact (a path or archive bytes). It imports no
 PDF/OCR code and never modifies the archive.
 
-Formal EPUB validation (M4.2) is implemented; AZW3 conversion (M4.3),
-cover handling (M4.4), and Kindle-specific formatting improvements
-(M4.5) are not implemented yet.
+M4.3 adds AZW3 conversion :func:`kindle_converter.epub.convert_epub_to_azw3`,
+an explicit, standalone step that turns a finished EPUB artifact into an
+AZW3 Kindle ebook through Calibre's ``ebook-convert`` executable (an
+optional external system dependency). It consumes only the EPUB artifact --
+never a PDF or ``Book`` -- and is deliberately not chained into
+``convert_pdf_to_epub``:
+
+    >>> from kindle_converter.epub import convert_epub_to_azw3
+    >>> convert_epub_to_azw3("book.epub", "book.azw3")
+
+Formal EPUB validation (M4.2) and EPUB -> AZW3 conversion (M4.3) are
+implemented; cover handling (M4.4) and Kindle-specific formatting
+improvements (M4.5) are not implemented yet.
 """
 
 from .pipeline import convert_pdf_to_book, convert_pdf_to_epub

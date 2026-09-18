@@ -13,14 +13,36 @@ produces the ``Book``. M4.2 adds the read-only structural validator in
 :mod:`kindle_converter.epub.validation` (:func:`validate_epub`), which
 inspects a generated EPUB artifact -- never a PDF or ``Book`` -- and reports
 structured findings without modifying the artifact.
+
+M4.3 adds :func:`convert_epub_to_azw3`, an explicit, standalone output step
+that turns a finished EPUB artifact into an AZW3 (Kindle) ebook through an
+external conversion backend. The production backend is Calibre's
+``ebook-convert`` executable (an optional system dependency, isolated in
+:mod:`kindle_converter.epub.calibre`): this layer never consumes a PDF or
+``Book``, never implements the AZW3 format itself, and never chains
+automatically after EPUB generation. Full detail -- the validation guarantee
+(artifact existence plus non-empty, *not* Kindle rendering correctness) and
+the determinism contract (command construction only, not AZW3 bytes) -- is
+documented in :mod:`kindle_converter.epub.azw3`.
 """
 
+from .azw3 import (
+    AZW3BackendUnavailableError,
+    AZW3ConversionBackend,
+    AZW3ConversionError,
+    AZW3ConversionFailedError,
+    AZW3ConversionResult,
+    AZW3InvalidInputError,
+    AZW3InvalidOutputError,
+    convert_epub_to_azw3,
+)
 from .builder import (
     EPUBGenerationError,
     InvalidImageError,
     NoChaptersError,
     build_epub,
 )
+from .calibre import CalibreBackend
 from .validation import (
     EPUBValidationCode,
     EPUBValidationError,
@@ -31,6 +53,14 @@ from .validation import (
 )
 
 __all__ = [
+    "AZW3BackendUnavailableError",
+    "AZW3ConversionBackend",
+    "AZW3ConversionError",
+    "AZW3ConversionFailedError",
+    "AZW3ConversionResult",
+    "AZW3InvalidInputError",
+    "AZW3InvalidOutputError",
+    "CalibreBackend",
     "EPUBGenerationError",
     "EPUBValidationCode",
     "EPUBValidationError",
@@ -40,5 +70,6 @@ __all__ = [
     "InvalidImageError",
     "NoChaptersError",
     "build_epub",
+    "convert_epub_to_azw3",
     "validate_epub",
 ]

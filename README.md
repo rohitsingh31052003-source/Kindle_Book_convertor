@@ -6,16 +6,17 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 4 — Kindle Output (M4.1 and M4.2 complete)
+**Development stage:** Milestone 4 — Kindle Output (M4.1, M4.2 and M4.3 complete)
 
 The project now has a working conversion engine with deterministic
 validation. PDF analysis, layout-aware reconstruction (reading order,
 paragraphs, headings, chapters, page-number and header/footer removal,
 metadata, images), OCR-aware processing for scanned and mixed PDFs,
-Kindle-oriented EPUB generation, and structural EPUB validation are
-implemented and covered by a deterministic test suite. AZW3
-conversion (M4.3), cover handling (M4.4), Kindle-specific formatting
-improvements (M4.5), and a graphical interface are upcoming milestones.
+Kindle-oriented EPUB generation, structural EPUB validation, and EPUB → AZW3
+conversion (via Calibre's `ebook-convert`) are implemented and covered by a
+deterministic test suite. Cover handling (M4.4), Kindle-specific
+formatting improvements (M4.5), and a graphical interface are upcoming
+milestones.
 
 ## Goals
 
@@ -125,10 +126,9 @@ src/
     │   ├── builder.py
     │   ├── toc.py
     │   ├── css.py
-    │   └── validation.py
-    │
-    ├── azw3/
-    │   └── converter.py
+    │   ├── validation.py
+    │   ├── azw3.py        # M4.3: EPUB → AZW3 conversion API
+    │   └── calibre.py     # M4.3: Calibre ebook-convert backend
     │
     └── pipeline.py
 ```
@@ -379,6 +379,79 @@ images, and page-break markers. Failures are reported as
 `EPUBValidationCode` codes; expected malformed input never leaks as
 raw low-level exceptions.
 
+### AZW3 conversion (M4.3, requires optional Calibre)
+
+M4.3 adds EPUB → AZW3 conversion as an explicit, standalone step on top of
+the finished EPUB artifact:
+
+```text
+Book → build_epub() → EPUB → convert_epub_to_azw3() → AZW3
+```
+
+`convert_epub_to_azw3()` consumes an **EPUB artifact** (a filesystem path) —
+never a PDF and never a `Book`. It performs no EPUB validation and no PDF
+processing internally; those remain separate steps. AZW3 generation is done
+by an external conversion backend: the production backend wraps **Calibre's
+`ebook-convert` command** through a small adapter (see
+`kindle_converter.epub.calibre`), and the AZW3 format itself is never
+implemented in Python.
+
+```python
+from kindle_converter.epub import convert_epub_to_azw3
+
+# Discovered automatically on PATH (e.g. C:\Program Files\Calibre2 on Windows)
+convert_epub_to_azw3("book.epub", "book.azw3")
+
+# Or point at an explicit ebook-convert executable
+convert_epub_to_azw3(
+    "book.epub",
+    "book.azw3",
+    calibre_path=r"C:\Program Files\Calibre2\ebook-convert.exe",
+)
+```
+
+Key facts about the M4.3 feature:
+
+* **Calibre is optional and external.** It is a system dependency installed
+  by Calibre's own installer, never by this project: nothing in
+  `pyproject.toml` pulls it in, `import kindle_converter` keeps working
+  without it, and EPUB generation/validation never require it. Only AZW3
+  conversion touches Calibre.
+* **It is a separate, explicit step.** AZW3 output is never generated
+  implicitly by `convert_pdf_to_epub` or `convert_pdf_to_book`. Callers
+  compose the full chain (`PDF → Book → EPUB → AZW3`) themselves when they
+  need it. The existing PDF → EPUB behavior is unchanged.
+* **Safe subprocess invocation.** `ebook-convert` is invoked with
+  `subprocess.run([...], shell=False, capture_output=True, ...)` — no shell,
+  no shell interpolation, paths stay separate arguments (spaces are safe),
+  the return code is checked, and a missing/unrunnable executable or a
+  non-zero exit surfaces as a dedicated project error (not a raw
+  `FileNotFoundError`/`CalledProcessError`).
+* **Error taxonomy.** `AZW3ConversionError` is the base class;
+  `AZW3BackendUnavailableError` (Calibre not found), `AZW3ConversionFailedError`
+  (non-zero exit, with a bounded diagnostic excerpt), `AZW3InvalidInputError`
+  (missing/unreadable source EPUB), and `AZW3InvalidOutputError` (Calibre
+  reported success but the output is missing/empty) are the specific cases.
+* **Validation guarantee.** "Success" means Calibre exited 0 **and** the
+  requested output exists, is a regular file, and is non-empty. It is
+  **not** a guarantee of Kindle rendering correctness or marketplace
+  acceptance — no AZW3 parser or Kindle compatibility validator is
+  implemented.
+* **Determinism.** Command construction is deterministic (same executable +
+  input + output → same argument list, no shell quoting, no timestamps, no
+  temporary files). Byte-for-byte deterministic AZW3 output is **not**
+  promised: Calibre may stamp its own metadata/timestamps into the file.
+* **Tests.** The core suite tests conversion through a stubbed subprocess and
+  injected fake backends — Calibre is never required, and paths containing
+  spaces/child directories are covered. An optional integration suite
+  (`tests/test_epub_azw3_calibre.py`) runs the real `ebook-convert` when it
+  is available and skips cleanly otherwise:
+
+  ```bash
+  # Windows example (adjust to your install location)
+  CALIBRE_CONVERT="C:\Program Files\Calibre2\ebook-convert.exe" pytest
+  ```
+
 ### Building the package
 
 ```bash
@@ -478,7 +551,8 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   the unified `Book`, for TEXT, SCANNED, and MIXED PDFs)
 * [x] EPUB validation (M4.2 — structural validation of generated EPUB
   artifacts through `kindle_converter.epub.validate_epub`)
-* [ ] AZW3 conversion
+* [x] AZW3 conversion (M4.3 — explicit EPUB → AZW3 step through Calibre's
+  optional external `ebook-convert` tool)
 * [ ] Cover handling
 * [ ] Kindle-specific formatting improvements
 
