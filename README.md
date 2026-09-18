@@ -1090,7 +1090,10 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 
 ### Milestone 6 — Quality and Distribution
 
-* [ ] Build representative test corpus
+* [x] Build representative test corpus (M6.1; deterministic synthetic PDF
+  corpus under `tests/fixtures/corpus` — see that directory's `README.md` —
+  with a byte-reproducible generator, a machine-readable `manifest.json`,
+  and infrastructure coverage in `tests/test_corpus.py`)
 * [ ] Add regression tests
 * [ ] Measure conversion quality
 * [ ] Improve performance

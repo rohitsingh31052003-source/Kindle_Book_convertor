@@ -1,0 +1,273 @@
+{
+  "corpus": {
+    "categories": [
+      "chapter_heavy",
+      "edge_cases",
+      "headers_footers",
+      "mixed_text_image",
+      "multi_column",
+      "normal_novel",
+      "pdf_with_images",
+      "scanned_book",
+      "textbook_dense",
+      "unusual_typography"
+    ],
+    "description": "Deterministic, repository-safe PDF corpus for Milestone 6 regression, quality, and performance measurement.",
+    "generator": "tests.fixtures.corpus.generate_corpus",
+    "name": "kindle-converter-representative-corpus",
+    "notes": "All fixtures are synthetic and project-authored; no external or copyrighted material is committed. Classification and page-count expectations are guaranteed for the PyMuPDF editions this repository supports (>=1.24,<2).",
+    "version": "1.0.0"
+  },
+  "documents": [
+    {
+      "category": "normal_novel",
+      "classification": {
+        "expected": "TEXT"
+      },
+      "description": "A 6-page single-column novel with a title page and three explicitly numbered chapters. Exercises ordinary paragraph reconstruction, native heading and chapter detection, and normal single-column reading order.",
+      "expectations": {
+        "image_page_count": 0,
+        "page_count": 6,
+        "text_page_count": 6
+      },
+      "features": [
+        "paragraphs",
+        "headings",
+        "chapters",
+        "reading_order"
+      ],
+      "generator": "_generate_novel_basic",
+      "id": "novel_basic",
+      "license": "Proprietary (project-authored synthetic content)",
+      "path": "pdfs/novel_basic.pdf",
+      "source": "synthetic"
+    },
+    {
+      "category": "textbook_dense",
+      "classification": {
+        "expected": "TEXT"
+      },
+      "description": "A dense structured textbook: 10pt serif body text, numbered sections (1.-4.), and lettered subsections in a bold serif face. Exercises the reconstruction of tightly packed documents with a heading/subheading hierarchy.",
+      "expectations": {
+        "image_page_count": 0,
+        "page_count": 6,
+        "text_page_count": 6
+      },
+      "features": [
+        "dense_text",
+        "headings",
+        "subheadings",
+        "structured_content"
+      ],
+      "generator": "_generate_textbook_dense",
+      "id": "textbook_dense",
+      "license": "Proprietary (project-authored synthetic content)",
+      "path": "pdfs/textbook_dense.pdf",
+      "source": "synthetic"
+    },
+    {
+      "category": "multi_column",
+      "classification": {
+        "expected": "TEXT"
+      },
+      "description": "A 3-page two-column newspaper-style article. Blocks are placed in interleaved column order so a naive row-major reader would produce an observably wrong reading order; exercises the M2.6 multi-column reconstruction.",
+      "expectations": {
+        "image_page_count": 0,
+        "left_column_marker": "L1",
+        "page_count": 3,
+        "right_column_marker": "R1",
+        "text_page_count": 3
+      },
+      "features": [
+        "two_columns",
+        "reading_order",
+        "full_width_heading"
+      ],
+      "generator": "_generate_twocolumn_article",
+      "id": "twocolumn_article",
+      "license": "Proprietary (project-authored synthetic content)",
+      "path": "pdfs/twocolumn_article.pdf",
+      "source": "synthetic"
+    },
+    {
+      "category": "scanned_book",
+      "classification": {
+        "expected": "SCANNED"
+      },
+      "description": "A 5-page image-only book. Each page embeds a full-page raster of large recognizable prose with no native text at all, so the document classifies SCANNED and routes every page through the render -> OCR -> cleanup path.",
+      "expectations": {
+        "image_page_count": 5,
+        "page_count": 5,
+        "text_page_count": 0
+      },
+      "features": [
+        "image_only_pages",
+        "ocr_path",
+        "scanned_document"
+      ],
+      "generator": "_generate_scanned_book",
+      "id": "scanned_book",
+      "license": "Proprietary (project-authored synthetic content)",
+      "path": "pdfs/scanned_book.pdf",
+      "source": "synthetic"
+    },
+    {
+      "category": "pdf_with_images",
+      "classification": {
+        "expected": "TEXT"
+      },
+      "description": "A 4-page report mixing body text with meaningful colored figures and captions. Images cover well under the 50% page-area threshold so every page stays TEXT, exercising the M2.13 image extraction and placement path without changing classification.",
+      "expectations": {
+        "image_page_count": 4,
+        "page_count": 4,
+        "text_page_count": 4
+      },
+      "features": [
+        "embedded_images",
+        "captions",
+        "image_placement"
+      ],
+      "generator": "_generate_text_with_images",
+      "id": "text_with_images",
+      "license": "Proprietary (project-authored synthetic content)",
+      "path": "pdfs/text_with_images.pdf",
+      "source": "synthetic"
+    },
+    {
+      "category": "headers_footers",
+      "classification": {
+        "expected": "TEXT"
+      },
+      "description": "A 6-page document with an identical running header, an identical footer, and a changing bare page number at the bottom edge of every page. Exercises M2.5 furniture detection and the M2.10 page-number removal over repeated body paragraphs.",
+      "expectations": {
+        "footer_text": "Chapter One",
+        "header_text": "The Lantern Keeper",
+        "image_page_count": 0,
+        "page_count": 6,
+        "text_page_count": 6
+      },
+      "features": [
+        "repeated_header",
+        "repeated_footer",
+        "page_numbers"
+      ],
+      "generator": "_generate_headers_footers",
+      "id": "headers_footers",
+      "license": "Proprietary (project-authored synthetic content)",
+      "path": "pdfs/headers_footers.pdf",
+      "source": "synthetic"
+    },
+    {
+      "category": "unusual_typography",
+      "classification": {
+        "expected": "TEXT"
+      },
+      "description": "A 4-page document with deliberately unusual but deterministic typography: a centered dedication on an otherwise sparse page, a monospaced indented quotation, small-caps emphasis lines, very generous leading, and an italic serif closing section. Exercises the layout, heading, and reconstruction logic against documents that do not follow a tight grid.",
+      "expectations": {
+        "image_page_count": 0,
+        "page_count": 4,
+        "text_page_count": 4
+      },
+      "features": [
+        "unusual_typography",
+        "centered_elements",
+        "monospace_quote"
+      ],
+      "generator": "_generate_unusual_typography",
+      "id": "unusual_typography",
+      "license": "Proprietary (project-authored synthetic content)",
+      "path": "pdfs/unusual_typography.pdf",
+      "source": "synthetic"
+    },
+    {
+      "category": "mixed_text_image",
+      "classification": {
+        "expected": "MIXED"
+      },
+      "description": "An 8-page MIXED document: four native-text pages, three scanned-style full-page image pages, and one genuinely MIXED page (native text plus an image covering over 50% of the page). Exercises the M3.5 per-page routing that keeps native and OCR text streams separate.",
+      "expectations": {
+        "image_page_count": 4,
+        "page_count": 8,
+        "text_page_count": 5
+      },
+      "features": [
+        "native_text",
+        "ocr_images",
+        "mixed_routing"
+      ],
+      "generator": "_generate_mixed_text_image",
+      "id": "mixed_text_image",
+      "license": "Proprietary (project-authored synthetic content)",
+      "path": "pdfs/mixed_text_image.pdf",
+      "source": "synthetic"
+    },
+    {
+      "category": "chapter_heavy",
+      "classification": {
+        "expected": "TEXT"
+      },
+      "description": "A chapter-heavy document of eight explicit, numbered chapters, one per page. Exercises chapter-boundary detection, the monotonic chapter-number sequence, chapter-based TOC generation, and EPUB chapter splitting.",
+      "expectations": {
+        "image_page_count": 0,
+        "min_chapters": 6,
+        "page_count": 8,
+        "text_page_count": 8
+      },
+      "features": [
+        "multiple_chapters",
+        "chapter_boundaries",
+        "headings"
+      ],
+      "generator": "_generate_chapters_long",
+      "id": "chapters_long",
+      "license": "Proprietary (project-authored synthetic content)",
+      "path": "pdfs/chapters_long.pdf",
+      "source": "synthetic"
+    },
+    {
+      "category": "edge_cases",
+      "classification": {
+        "expected": "MIXED"
+      },
+      "description": "A tiny 4-page document alternating meaningful text pages with intentionally blank pages. The blank pages carry no text and no images, so the document classifies MIXED and exercises how blank pages flow through classification and reconstruction.",
+      "expectations": {
+        "image_page_count": 0,
+        "page_count": 4,
+        "text_page_count": 2
+      },
+      "features": [
+        "blank_pages",
+        "mixed_classification",
+        "small_document"
+      ],
+      "generator": "_generate_edge_interleaved_blank",
+      "id": "edge_interleaved_blank",
+      "license": "Proprietary (project-authored synthetic content)",
+      "path": "pdfs/edge_interleaved_blank.pdf",
+      "source": "synthetic"
+    },
+    {
+      "category": "edge_cases",
+      "classification": {
+        "expected": "TEXT"
+      },
+      "description": "A minimal two-page text document: one main heading, a page-2 section heading, and a few short paragraphs. Exercises structure and chapter handling on the smallest useful text document.",
+      "expectations": {
+        "image_page_count": 0,
+        "page_count": 2,
+        "text_page_count": 2
+      },
+      "features": [
+        "minimal_document",
+        "short_document",
+        "single_heading"
+      ],
+      "generator": "_generate_edge_short_report",
+      "id": "edge_short_report",
+      "license": "Proprietary (project-authored synthetic content)",
+      "path": "pdfs/edge_short_report.pdf",
+      "source": "synthetic"
+    }
+  ],
+  "external": []
+}
