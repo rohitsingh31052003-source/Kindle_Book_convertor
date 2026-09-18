@@ -6,7 +6,7 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 5 — User Interface (M5.4 — conversion options + cover handling UI complete)
+**Development stage:** Milestone 5 — User Interface (M5.5 — background conversion with progress complete)
 
 The project has a working conversion engine with deterministic
 validation. PDF analysis, layout-aware reconstruction (reading order,
@@ -36,7 +36,19 @@ conversion**: request construction and readiness validation are
 synchronous, non-executing, and worker-free; ``ConversionApplication.convert``
 is never invoked from normal UI interaction. Conversion execution (progress,
 output, results) is deliberately deferred to M5.5; M5.4 ends
-configured-and-ready.
+configured-and-ready. M5.5 completes the desktop workflow: clicking **Convert**
+runs the configured `ConversionRequest` through
+`ConversionApplication.convert` **in the background** on a dedicated
+`QThread` worker (no cancellation in M5.5) so the window stays responsive. The
+worker reports stage-level progress and the final result (or failure) back to
+the window through Qt queued signals; the UI reflects it with three new
+`UiState` values (converting → completed / conversion failed), a progress bar
+(indeterminate while converting, full on success, reset on failure), status
+messages, and last-result/last-error accessors. The window can never be closed
+while a conversion is in flight — `closeEvent` waits for the running conversion
+to finish safely. The UI remains a thin presentation layer: the worker (and
+thus conversion) still only ever calls the M5.1 application API, and the core
+library never imports PySide6.
 
 ## Goals
 
@@ -159,9 +171,10 @@ src/
     │   ├── progress.py    # ConversionStage / ConversionProgress / callback
     │   └── errors.py      # ApplicationError boundary (subclasses PipelineError)
     │
-    ├── ui/                # M5.2/M5.3/M5.4: PySide6 desktop UI (ui extra)
+    ├── ui/                # M5.2/M5.3/M5.4/M5.5: PySide6 desktop UI (ui extra)
     │   ├── app.py         #   application entry point (create_application / main)
-    │   ├── main_window.py #   input selection + analysis + conversion options (UiState model)
+    │   ├── main_window.py #   input selection + analysis + options + background conversion
+    │   ├── worker.py      #   M5.5: QtCore-only ConversionWorker (off-GUI-thread convert)
     │   └── __main__.py    #   python -m kindle_converter.ui
     │
     └── pipeline.py
@@ -264,7 +277,7 @@ pytest
 For full development setup (including the runtime dependencies), use the
 editable install described above.
 
-### Desktop UI (M5.2 shell, M5.3 input selection + analysis, M5.4 conversion options)
+### Desktop UI (M5.2 shell, M5.3 input selection + analysis, M5.4 conversion options, M5.5 background conversion)
 
 The desktop application is a PySide6 UI (`kindle_converter.ui`). PySide6 is an
 **optional** dependency (the `ui` extra): the core library never imports it,
@@ -330,6 +343,45 @@ presentation layer: analysis and configuration validation always go through the
 M5.1 application API, never by importing or calling the PDF/pipeline
 implementation from the UI. Everything is synchronous for now; background
 conversion execution is reserved for M5.5.
+
+M5.5 adds background **conversion execution** to the window:
+
+* **Convert button + progress bar.** A **Convert** row sits above the status
+  label: a `convertButton` (enabled exactly when the window is
+  configured-and-ready, including after a failed conversion for retry) and a
+  `progressBar`. While converting the bar is **indeterminate** (M5.5 never
+  fabricates a percentage — `ConversionApplication.convert` reports discrete
+  `ConversionStage` progress, not completion fractions); it fills to 100% on
+  success and resets to 0 on failure.
+* **Background worker, thread-safe by construction.** Conversion runs on a
+  dedicated `QThread` via a new QtCore-only `ConversionWorker`
+  (`kindle_converter.ui.worker`). The worker only ever calls the M5.1
+  application API; it never touches widgets, and the UI never runs
+  `ConversionApplication.convert` on the GUI thread. Reusing the existing
+  `ConversionStage` / `ConversionProgress` / progress-callback types, the
+  worker relays `progress`, `succeeded`, and `failed` back to the window over
+  Qt queued signal connections, then emits `finished` so the window can
+  release and clean up the thread (`worker.finished → thread.quit`
+  direct-connected; `thread.finished` triggers window teardown). One worker +
+  one thread per conversion, retained on the window, never reused.
+* **Explicit conversion states.** Three new `UiState` values —
+  `CONVERTING`, `COMPLETED`, `CONVERSION_FAILED` — gate the controls while a
+  conversion is in flight (everything disabled during `CONVERTING`, restored
+  afterwards) and drive the status line: an indeterminate "converting" message
+  during the run, the conversion's own completion message verbatim on success,
+  and the failure message verbatim on failure. The window exposes
+  `last_result` / `last_error` accessors for the completed run.
+* **No cancellation in M5.5** (a real progress callback and cancellation are
+  future milestones). `closeEvent` guards the window instead: closing while a
+  conversion is running waits for it to finish safely, so a live `QThread` is
+  never destroyed mid-run.
+* **Testability / determinism.** The flow tests drive conversion through an
+  injectable fake application object that can block on an event, so the worker
+  thread, queued signal delivery, and teardown are exercised deterministically
+  on an offscreen `QApplication` (no real PDFs, no Calibre). Thread teardown
+  is fully flushed in the tests (`DeferredDelete` events are dispatched while
+  the window is still alive) so no queued delete can outlive a test and crash
+  a later one.
 
 ### OCR (scanned PDFs)
 
@@ -809,9 +861,10 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 * [ ] Simple desktop interface
 * [ ] Drag-and-drop input
 * [ ] Output format selection
-* [ ] Conversion execution (M5.5 — run the configured `ConversionRequest` in
-  the background)
-* [ ] Conversion progress
+* [x] Conversion execution (M5.5 — run the configured `ConversionRequest` in
+  the background on a `QThread` worker via `ConversionApplication.convert`)
+* [x] Conversion progress (M5.5 — indeterminate progress bar while converting,
+  full on success, reset on failure)
 * [ ] Error reporting
 * [ ] Output directory management
 

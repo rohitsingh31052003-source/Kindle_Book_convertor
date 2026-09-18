@@ -96,3 +96,30 @@ def test_only_ui_modules_import_pyside6() -> None:
         if pattern.search(module_path.read_text(encoding="utf-8")):
             offenders.append(str(relative))
     assert offenders == [], f"non-UI modules importing PySide6: {offenders}"
+
+
+def test_conversion_worker_module_stays_qobject_only() -> None:
+    """The M5.5 worker must never touch widgets or the main window.
+
+    The worker is the Qt threading boundary for background conversion: it only
+    imports ``PySide6.QtCore`` (``QObject``/``Signal``) and delegates all
+    conversion work to the application layer. A widget or ``MainWindow``
+    reference here would break the UI/gui-thread separation the background
+    thread needs, and would also make the worker depend on the full Qt widget
+    runtime that the module deliberately avoids.
+    """
+    root = Path(kindle_converter.__file__).resolve().parent
+    source = (root / "ui" / "worker.py").read_text(encoding="utf-8")
+    forbidden = (
+        "QtWidgets",
+        "QApplication",
+        "QMainWindow",
+        "MainWindow",
+        "QWidget",
+        "QDialog",
+        "QLabel",
+        "QPushButton",
+    )
+    offenders = [token for token in forbidden if token in source]
+    assert offenders == [], f"worker.py references UI-widget symbols: {offenders}"
+    assert "from PySide6.QtCore import QObject, Signal" in source

@@ -1,4 +1,4 @@
-"""PySide6 desktop UI (M5.2 shell, M5.3 input selection + analysis, M5.4 options).
+"""PySide6 desktop UI (M5.2 shell, M5.3 input selection + analysis, M5.4 options, M5.5 conversion).
 
 This package is the outer (UI) layer of the application. It depends on the
 optional PySide6 runtime (the ``ui`` extra) and on
@@ -16,15 +16,22 @@ code:
 
 ``MainWindow`` is the application's main window: it can select a PDF, analyze
 it through the M5.1 application boundary, display the M3.1 analysis summary,
-and configure a conversion (output format, output directory, optional cover)
-into a real application-layer ``ConversionRequest`` via
-``MainWindow.build_conversion_request``. ``UiState`` is the small explicit
-state model it exposes (analysis states plus ``CONFIGURING``/``READY``).
+configure a conversion (output format, output directory, optional cover) into
+a real application-layer ``ConversionRequest``, and -- since M5.5 -- start the
+configured conversion on a background ``QThread`` and show its progress.
+``UiState`` is the small explicit state model it exposes (analysis states,
+``CONFIGURING``/``READY``, and the M5.5 ``CONVERTING``/``COMPLETED``/
+``CONVERSION_FAILED`` conversion states). ``ConversionWorker`` is the M5.5
+:class:`QObject` worker that the window moves to a ``QThread``: it delegates
+the entire conversion to ``ConversionApplication.convert`` and forwards the
+application's ``ConversionProgress``/result/error over Qt signals without ever
+touching widgets.
 """
 
 from __future__ import annotations
 
 from .app import main
 from .main_window import MainWindow, UiState
+from .worker import ConversionWorker
 
-__all__ = ["MainWindow", "UiState", "main"]
+__all__ = ["ConversionWorker", "MainWindow", "UiState", "main"]

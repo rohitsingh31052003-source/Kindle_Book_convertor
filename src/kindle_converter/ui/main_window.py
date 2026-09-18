@@ -1,4 +1,4 @@
-"""Main application window (M5.2, M5.3 input selection + PDF analysis, M5.4 options).
+"""Main application window (M5.2, M5.3 input selection + PDF analysis, M5.4 options, M5.5 conversion).
 
 The :class:`MainWindow` implements the desktop workflow: select a PDF, analyze
 it, and read a summary of the analysis, then configure a conversion request
@@ -29,6 +29,28 @@ execution**: ``ConversionApplication.convert`` is never invoked from normal UI
 interaction, no ``QThread``/worker is introduced, and no progress or result UI
 is shown. Background execution is explicitly reserved for M5.5.
 
+M5.5 adds the conversion-execution step on top of the M5.4 ``READY`` state.
+Clicking **Convert** builds the current configuration into the real
+application-layer :class:`~kindle_converter.application.ConversionRequest`,
+validates it through :meth:`ConversionApplication.validate_request`, and runs
+it on a dedicated :class:`QThread` via
+:class:`~kindle_converter.ui.worker.ConversionWorker`. The worker only calls
+:meth:`ConversionApplication.convert` (the application layer stays the sole
+owner of analysis, processing/OCR, reconstruction, EPUB generation,
+validation, AZW3 conversion, cover handling, and output-path calculation) and
+forwards the *existing*
+:class:`~kindle_converter.application.ConversionProgress` events to the window
+over Qt signals. During a conversion the window is in
+:attr:`UiState.CONVERTING`: the indeterminate progress bar is active, each
+application stage message is shown as status text, and every control that
+could change the active request (browse, analyze, output format, output
+directory, cover, convert) is disabled. A successful conversion is retained as
+the real :class:`~kindle_converter.application.ConversionResult` for M5.6; a
+failure is shown as a status message and the window returns to a usable
+non-converting state. M5.5 implements **no** cancellation (the application
+pipeline has no cooperative-cancellation hook, so the worker cannot be safely
+stopped mid-conversion), no results screen, and no automatic output opening.
+
 Visual polish (themes, icons, fonts, animations) is deliberately out of scope;
 this is a clean default Qt layout only.
 """
@@ -39,7 +61,7 @@ import logging
 from enum import Enum
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QThread, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -48,6 +70,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -57,12 +80,16 @@ from kindle_converter.application import (
     ApplicationError,
     ConversionApplication,
     ConversionFailedError,
+    ConversionProgress,
     ConversionRequest,
+    ConversionResult,
     InvalidRequestError,
     OutputFormat,
 )
 from kindle_converter.pdf import PDFType
 from kindle_converter.pdf.models import PDFAnalysis
+
+from .worker import ConversionWorker
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +112,9 @@ _STATUS_ANALYSIS_COMPLETE = "Analysis complete"
 _STATUS_ANALYSIS_FAILED = "Analysis failed. Please fix the input and try again."
 _STATUS_CONFIGURING = "Configure conversion options to proceed"
 _STATUS_READY = "Ready for conversion"
+_STATUS_CONVERTING = "Converting..."
+_STATUS_COMPLETED = "Conversion complete"
+_STATUS_CONVERSION_FAILED = "Conversion failed"
 
 _ERROR_NO_INPUT = "Please select a PDF file."
 _ERROR_NOT_FOUND = "The selected PDF file could not be found."
@@ -92,6 +122,7 @@ _ERROR_NOT_A_FILE = "The selected input is not a regular file."
 _ERROR_CANNOT_READ = "The selected PDF file could not be read."
 _ERROR_INVALID_INPUT = "The selected input is not a valid PDF."
 _ERROR_ANALYSIS_FAILED = "The PDF could not be analyzed."
+_ERROR_CONVERSION_FAILED = "Conversion failed."
 
 #: Placeholder shown for every analysis value until an analysis is displayed.
 _NO_VALUE = "\u2014"
@@ -127,7 +158,7 @@ _FORMAT_TO_FORMATS: dict[OutputFormat, frozenset[OutputFormat]] = {
 
 
 class UiState(Enum):
-    """The explicit, small UI state model (M5.3, conversion options added M5.4).
+    """The explicit, small UI state model (M5.3, options M5.4, conversion M5.5).
 
     ``NO_INPUT -> INPUT_SELECTED -> ANALYZING -> ANALYSIS_COMPLETE`` is the
     happy analysis path; ``ANALYZING -> ANALYSIS_FAILED`` is the error path.
@@ -135,8 +166,11 @@ class UiState(Enum):
     ``ANALYSIS_COMPLETE`` is the just-analyzed state, ``CONFIGURING`` means a
     configuration change is incomplete, and ``READY`` means the current
     configuration (analyzed input + output directory + valid format + optional
-    acceptable cover) is ready for conversion. The state drives widget
-    enablement and the status message.
+    acceptable cover) is ready for conversion. M5.5 extends the model with the
+    execution states: ``READY -> CONVERTING`` while a background conversion is
+    running, then ``COMPLETED`` on success or ``CONVERSION_FAILED`` on failure
+    (both leave the configuration intact so the user can convert again). The
+    state drives widget enablement and the status message.
     """
 
     #: No PDF has been selected yet.
@@ -158,10 +192,20 @@ class UiState(Enum):
     #: analyzed input, an output directory, a valid output format, and an
     #: acceptable optional cover.
     READY = "ready"
+    #: A background conversion is running (M5.5); every control that could
+    #: change the active request is disabled and no second conversion can start.
+    CONVERTING = "converting"
+    #: A conversion finished successfully; the real application-layer
+    #: ``ConversionResult`` is retained for M5.6. The configuration is intact
+    #: so another conversion can be started.
+    COMPLETED = "completed"
+    #: A conversion failed; the failure is shown as a status message and the
+    #: window returns to a usable non-converting state for retry.
+    CONVERSION_FAILED = "conversion_failed"
 
 
 class MainWindow(QMainWindow):
-    """The main application window: input selection, analysis, conversion options.
+    """The main application window: input selection, analysis, conversion.
 
     Widgets carry stable ``objectName`` values (``appTitle``, ``subtitle``,
     ``inputSectionTitle``, ``inputPath``, ``browseButton``, ``analyzeButton``,
@@ -169,11 +213,23 @@ class MainWindow(QMainWindow):
     ``textPagesValue``, ``scannedPagesValue``, ``mixedPagesValue``,
     ``ocrRequiredValue``, ``conversionSectionTitle``, ``outputFormatCombo``,
     ``outputDirectory``, ``outputDirectoryButton``, ``coverPath``,
-    ``coverBrowseButton``, ``coverClearButton``, ``statusLabel``) so tests and
-    later milestones can locate them without depending on layout order.
+    ``coverBrowseButton``, ``coverClearButton``, ``convertButton``,
+    ``progressBar``, ``statusLabel``) so tests and later milestones can locate
+    them without depending on layout order.
 
     ``application`` is the M5.1 boundary double-callers can inject for tests;
-    when omitted a real :class:`ConversionApplication` is used.
+    when omitted a real :class:`ConversionApplication` is used. The same
+    instance is handed to every :class:`ConversionWorker` this window spawns,
+    so in tests a deterministic fake application fully controls the background
+    conversion behavior.
+
+    The conversion thread lifecycle is explicit: each conversion gets exactly
+    one :class:`QThread` and one :class:`~kindle_converter.ui.worker.ConversionWorker`;
+    worker completion stops its own thread; the thread's ``finished`` signal
+    releases the retained references, so a later conversion starts with fresh
+    worker state. Closing the window while a conversion is running waits for
+    that thread to finish (M5.5 has no cancellation), so a running ``QThread``
+    is never destroyed unsafely.
     """
 
     def __init__(self, application: ConversionApplication | None = None) -> None:
@@ -186,6 +242,10 @@ class MainWindow(QMainWindow):
         self._output_directory: Path | None = None
         self._cover_path: Path | None = None
         self._state: UiState = UiState.NO_INPUT
+        self._conversion_result: ConversionResult | None = None
+        self._conversion_error: Exception | None = None
+        self._thread: QThread | None = None
+        self._worker: ConversionWorker | None = None
         self.setWindowTitle(APP_TITLE)
         self.resize(DEFAULT_WIDTH, DEFAULT_HEIGHT)
         self._build_central_area()
@@ -240,6 +300,25 @@ class MainWindow(QMainWindow):
         """Whether the current configuration is ready for conversion."""
         return self._configuration_ready()
 
+    @property
+    def last_result(self) -> ConversionResult | None:
+        """The most recent successful ``ConversionResult`` (retained for M5.6).
+
+        ``None`` before any conversion completes or when the last conversion
+        failed. This is the real application-layer result object, never a UI
+        reconstruction of its fields.
+        """
+        return self._conversion_result
+
+    @property
+    def last_error(self) -> Exception | None:
+        """The most recent conversion failure, or ``None``.
+
+        Set when a conversion (or its pre-flight validation) failed, so M5.6+
+        and tests can inspect the exact application-layer error.
+        """
+        return self._conversion_error
+
     # ------------------------------------------------------------------
     # Input selection
     # ------------------------------------------------------------------
@@ -261,8 +340,12 @@ class MainWindow(QMainWindow):
         """Select ``path`` as the input PDF (or ``None`` to clear the input).
 
         Only stores and displays the path -- the PDF is never opened or read
-        here -- and invalidates any stale analysis from a previous file.
+        here -- and invalidates any stale analysis from a previous file. A
+        no-op while a conversion is running, since the active request must not
+        change under the worker.
         """
+        if self._state is UiState.CONVERTING:
+            return
         if path is None:
             self._selected_path = None
             self._path_edit.clear()
@@ -283,10 +366,11 @@ class MainWindow(QMainWindow):
 
         Synchronous in M5.3 (no background execution). A repeated call while
         an analysis is running is a no-op; the Analyze button is also disabled
-        during :attr:`UiState.ANALYZING`. Failures are translated into
+        during :attr:`UiState.ANALYZING`. A call while a conversion is running
+        is likewise a no-op. Failures are translated into
         user-readable status messages and leave the window usable for a retry.
         """
-        if self._state is UiState.ANALYZING:
+        if self._state in (UiState.ANALYZING, UiState.CONVERTING):
             return
         selected = self._selected_path
         if selected is None:
@@ -348,8 +432,11 @@ class MainWindow(QMainWindow):
 
         Stores and displays the existing selection; the directory is never
         created just because it was selected. Re-evaluates configuration
-        readiness when an analysis exists.
+        readiness when an analysis exists. A no-op while a conversion is
+        running.
         """
+        if self._state is UiState.CONVERTING:
+            return
         if path is None:
             self._output_directory = None
             self._output_directory_edit.clear()
@@ -377,8 +464,11 @@ class MainWindow(QMainWindow):
 
         Only stores and displays the path -- no image processing happens in
         the UI. The application layer owns cover loading/validation (M4.4);
-        readiness reflects whether the application accepts the selection.
+        readiness reflects whether the application accepts the selection. A
+        no-op while a conversion is running.
         """
+        if self._state is UiState.CONVERTING:
+            return
         if path is None:
             self._cover_path = None
             self._cover_edit.clear()
@@ -389,7 +479,9 @@ class MainWindow(QMainWindow):
         self._refresh_configuration()
 
     def clear_cover(self) -> None:
-        """Remove the selected cover, if any."""
+        """Remove the selected cover, if any (no-op while converting)."""
+        if self._state is UiState.CONVERTING:
+            return
         self._cover_path = None
         self._cover_edit.clear()
         self._refresh_configuration()
@@ -426,6 +518,126 @@ class MainWindow(QMainWindow):
         )
 
     # ------------------------------------------------------------------
+    # Conversion execution (M5.5)
+    # ------------------------------------------------------------------
+
+    def convert_selected(self) -> None:
+        """Start a background conversion of the current ready configuration.
+
+        Builds the real application-layer :class:`ConversionRequest`, validates
+        it through :meth:`ConversionApplication.validate_request` (the same
+        pre-flight checks ``convert`` performs), and runs it on a dedicated
+        :class:`QThread` via :class:`~kindle_converter.ui.worker.ConversionWorker`.
+
+        The worker delegates the whole conversion to
+        :meth:`ConversionApplication.convert` and only reports progress/result/
+        failure over Qt signals; the GUI thread stays responsive and owns every
+        UI update. While the conversion runs the window is in
+        :attr:`UiState.CONVERTING`: all conflicting controls are disabled and a
+        second conversion cannot start. A successful
+        :class:`~kindle_converter.application.ConversionResult` is retained on
+        :attr:`last_result` for M5.6; a failure is shown as a status message.
+
+        Calling this while a conversion is running, or while the configuration
+        is not ready, is a no-op (with the unmet-condition message shown).
+        """
+        if self._state is UiState.CONVERTING:
+            return
+        if not self.is_configuration_ready:
+            self._status_label.setText(self._configuration_problem())
+            return
+        try:
+            request = self.build_conversion_request()
+            self._application.validate_request(request)
+        except ApplicationError as exc:
+            self._on_conversion_failed(exc)
+            return
+
+        worker = ConversionWorker(self._application, request)
+        thread = QThread(self)
+        worker.moveToThread(thread)
+
+        thread.started.connect(worker.run)
+        worker.progress.connect(self._on_conversion_progress)
+        worker.succeeded.connect(self._on_conversion_succeeded)
+        worker.failed.connect(self._on_conversion_failed)
+        # ``thread.quit`` is thread-safe and runs here directly in the worker
+        # thread the moment ``finished`` fires, so thread shutdown never waits
+        # on a queued call back into the GUI thread.
+        worker.finished.connect(thread.quit, Qt.ConnectionType.DirectConnection)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(lambda: self._on_conversion_thread_finished(thread))
+        thread.finished.connect(thread.deleteLater)
+
+        # References are retained on the window until the thread finishes, so
+        # the worker is never garbage-collected while it is running.
+        self._thread = thread
+        self._worker = worker
+        self._conversion_result = None
+        self._conversion_error = None
+        self._apply_state(UiState.CONVERTING)
+        thread.start()
+
+    def _on_conversion_progress(self, progress: ConversionProgress) -> None:
+        """Apply one application progress event to the status text.
+
+        Runs on the GUI thread (queued from the worker). The displayed text is
+        the stage/status message the application layer actually reported; no
+        percentage is fabricated.
+        """
+        if isinstance(progress, ConversionProgress):
+            self._status_label.setText(progress.message)
+
+    def _on_conversion_succeeded(self, result: ConversionResult) -> None:
+        """Retain the real ``ConversionResult`` and finish the conversion.
+
+        The result is kept verbatim (never reconstructed from fields) so M5.6
+        can consume it, and the window becomes :attr:`UiState.COMPLETED`.
+        """
+        self._conversion_result = result
+        self._apply_state(UiState.COMPLETED)
+
+    def _on_conversion_failed(self, error: Exception) -> None:
+        """Show a conversion failure and return the UI to a usable state.
+
+        Application errors are shown verbatim (they are user-facing);
+        unexpected errors collapse to a concise generic message (they are
+        already logged by the worker). The configuration is preserved so the
+        user can retry.
+        """
+        self._conversion_error = error
+        if isinstance(error, ApplicationError):
+            message = str(error)
+        else:
+            message = _ERROR_CONVERSION_FAILED
+        self._apply_state(UiState.CONVERSION_FAILED, status=message)
+
+    def _on_conversion_thread_finished(self, thread: QThread) -> None:
+        """Release the finished conversion thread/worker references.
+
+        Guarded by identity so a stale ``finished`` delivery from a previous
+        conversion can never clobber the references of a newer conversion.
+        """
+        if self._thread is not thread:
+            return
+        self._worker = None
+        self._thread = None
+
+    def closeEvent(self, event) -> None:
+        """Wait for an in-flight conversion before closing.
+
+        M5.5 has no cancellation, so the only safe way to close while a
+        conversion is running is to let it finish before destroying the
+        window: a running ``QThread`` must never be destroyed. The worker
+        stops its own thread as soon as ``convert`` returns, so ``wait()``
+        completes without deadlocking the GUI thread.
+        """
+        thread = self._thread
+        if thread is not None and thread.isRunning():
+            thread.wait()
+        event.accept()
+
+    # ------------------------------------------------------------------
     # Readiness helpers
     # ------------------------------------------------------------------
 
@@ -436,8 +648,11 @@ class MainWindow(QMainWindow):
         wherever analysis left it (a configuration cannot become ready before
         its PDF is analyzed). Otherwise the window becomes
         :attr:`UiState.READY` exactly when the configuration is valid, and
-        :attr:`UiState.CONFIGURING` with a concrete hint otherwise.
+        :attr:`UiState.CONFIGURING` with a concrete hint otherwise. A no-op
+        while a conversion is running (the active request must not change).
         """
+        if self._state is UiState.CONVERTING:
+            return
         if self._last_analysis is None:
             return
         if self._configuration_ready():
@@ -641,6 +856,23 @@ class MainWindow(QMainWindow):
 
         layout.addSpacing(12)
 
+        # --- Conversion action + progress (M5.5) ---------------------------
+        convert_row = QWidget(central)
+        convert_row_layout = QHBoxLayout(convert_row)
+        convert_row_layout.setContentsMargins(0, 0, 0, 0)
+        self._convert_button = QPushButton("Convert", convert_row)
+        self._convert_button.setObjectName("convertButton")
+        self._convert_button.clicked.connect(self.convert_selected)
+        convert_row_layout.addWidget(self._convert_button)
+        self._progress_bar = QProgressBar(convert_row)
+        self._progress_bar.setObjectName("progressBar")
+        self._progress_bar.setRange(0, 1)
+        self._progress_bar.setValue(0)
+        convert_row_layout.addWidget(self._progress_bar, 1)
+        layout.addWidget(convert_row)
+
+        layout.addSpacing(12)
+
         self._status_label = QLabel(central)
         self._status_label.setObjectName("statusLabel")
         self._status_label.setWordWrap(True)
@@ -669,27 +901,52 @@ class MainWindow(QMainWindow):
         """Apply ``state``: widget enablement, ``self._state``, status text.
 
         ``status`` overrides the state's default status message (used to show
-        concrete error text for :attr:`UiState.ANALYSIS_FAILED` and the
-        :attr:`UiState.CONFIGURING` hint).
+        concrete error text for :attr:`UiState.ANALYSIS_FAILED`, the
+        :attr:`UiState.CONFIGURING` hint, and conversion failures).
 
         Conversion-option widgets (output format, output directory, cover) are
         enabled only once an analysis has completed successfully -- the M5.4
-        workflow is linear (analyze first, then configure).
+        workflow is linear (analyze first, then configure). During a
+        conversion (:attr:`UiState.CONVERTING`) every control that could
+        change the active request is disabled. The progress bar is
+        indeterminate while a conversion runs (the M5.1 progress model is
+        stage-oriented, so no percentage is fabricated), full on success, and
+        reset on failure/idle.
         """
         self._state = state
-        analyzing = state is UiState.ANALYZING
+        busy = state in (UiState.ANALYZING, UiState.CONVERTING)
         has_input = state is not UiState.NO_INPUT
         analysis_done = state in (
             UiState.ANALYSIS_COMPLETE,
             UiState.CONFIGURING,
             UiState.READY,
+            UiState.CONVERTING,
+            UiState.COMPLETED,
+            UiState.CONVERSION_FAILED,
         )
-        self._browse_button.setEnabled(not analyzing)
-        self._analyze_button.setEnabled(has_input and not analyzing)
-        self._output_format_combo.setEnabled(analysis_done and not analyzing)
-        self._output_directory_button.setEnabled(analysis_done and not analyzing)
-        self._cover_browse_button.setEnabled(analysis_done and not analyzing)
-        self._cover_clear_button.setEnabled(analysis_done and not analyzing)
+        convert_ready = state in (
+            UiState.READY,
+            UiState.COMPLETED,
+            UiState.CONVERSION_FAILED,
+        )
+        self._browse_button.setEnabled(not busy)
+        self._analyze_button.setEnabled(has_input and not busy)
+        self._output_format_combo.setEnabled(analysis_done and not busy)
+        self._output_directory_button.setEnabled(analysis_done and not busy)
+        self._cover_browse_button.setEnabled(analysis_done and not busy)
+        self._cover_clear_button.setEnabled(analysis_done and not busy)
+        self._convert_button.setEnabled(convert_ready and not busy)
+
+        if state is UiState.CONVERTING:
+            self._progress_bar.setRange(0, 0)
+            self._progress_bar.setValue(0)
+        elif state is UiState.COMPLETED:
+            self._progress_bar.setRange(0, 1)
+            self._progress_bar.setValue(1)
+        else:
+            self._progress_bar.setRange(0, 1)
+            self._progress_bar.setValue(0)
+
         if status is not None:
             self._status_label.setText(status)
         elif state is UiState.NO_INPUT:
@@ -706,6 +963,12 @@ class MainWindow(QMainWindow):
             self._status_label.setText(_STATUS_CONFIGURING)
         elif state is UiState.READY:
             self._status_label.setText(_STATUS_READY)
+        elif state is UiState.CONVERTING:
+            self._status_label.setText(_STATUS_CONVERTING)
+        elif state is UiState.COMPLETED:
+            self._status_label.setText(_STATUS_COMPLETED)
+        elif state is UiState.CONVERSION_FAILED:
+            self._status_label.setText(_STATUS_CONVERSION_FAILED)
 
     def _show_error(self, message: str) -> None:
         """Enter the failed state, never presenting stale analysis as current."""
