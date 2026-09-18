@@ -67,7 +67,10 @@ EPUB serialization, EPUB validation rules, AZW3 conversion internals, or cover
 image processing -- those are delegated to their existing public APIs. Because
 M5.1 has no temporary-directory strategy yet, the EPUB artifact is always
 written into the requested output directory (it is also the AZW3 input when
-AZW3 is requested).
+AZW3 is requested). Since M5.7 each conversion runs inside an
+application-owned temporary workspace that is created on entry and
+deterministically cleaned up on exit; final artifacts are always written
+to the user's selected output directory, never the workspace.
 
 Threading
 ---------
@@ -85,10 +88,12 @@ from .errors import (
     InvalidRequestError,
     OutputError,
     ValidationFailedError,
+    WorkspaceError,
 )
 from .progress import ConversionProgress, ConversionStage, ProgressCallback
 from .request import ConversionRequest, CoverSource, OutputFormat, PathLike
 from .result import ConversionResult
+from .workspace import ConversionWorkspace
 
 __all__ = [
     "ApplicationError",
@@ -98,13 +103,15 @@ __all__ = [
     "ConversionProgress",
     "ConversionRequest",
     "ConversionStage",
+    "ConversionWorkspace",
     "CoverSource",
     "InvalidRequestError",
     "OutputError",
-        "OutputFormat",
+    "OutputFormat",
     "PathLike",
     "ProgressCallback",
     "ValidationFailedError",
+    "WorkspaceError",
 ]
 
 # The two public top-level aliases the M1--M4 package already exports remain the

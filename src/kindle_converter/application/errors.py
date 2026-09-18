@@ -34,6 +34,7 @@ __all__ = [
     "InvalidRequestError",
     "OutputError",
     "ValidationFailedError",
+    "WorkspaceError",
 ]
 
 
@@ -132,3 +133,12 @@ class AZW3OutputError(ApplicationError):
         super().__init__(message)
         self.epub_path = epub_path
         self.cause = cause
+
+
+class WorkspaceError(ApplicationError):
+    """The temporary workspace for a conversion could not be created.
+
+    Raised before any conversion work starts; no artifacts are produced
+    and no cleanup is needed. The originating ``OSError`` (if any) is
+    chained as ``__cause__``.
+    """

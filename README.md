@@ -6,7 +6,7 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 5 — User Interface (M5.6 — results + validation presentation complete)
+**Development stage:** Milestone 5 — User Interface (M5.7 — Errors + Temporary Files complete)
 
 The project has a working conversion engine with deterministic
 validation. PDF analysis, layout-aware reconstruction (reading order,
@@ -28,8 +28,8 @@ display a useful summary (page count, document type, text/scanned/mixed
 page counts, OCR requirement) with explicit UI states and clean
 validation/error handling. M5.4 adds the configuration step between
 analysis and conversion: after analyzing a PDF, the user picks an output
-format (EPUB or AZW3), an output directory, and an optional cover, and the
-window summarizes the result into a real application-layer
+format (EPUB or AZW3), an output directory, and an optional cover, and
+the window summarizes the result into a real application-layer
 `ConversionRequest`, tracking an explicit readiness model
 (not configured → configuring → ready for conversion). M5.4 performs **no
 conversion**: request construction and readiness validation are
@@ -39,8 +39,8 @@ output, results) is deliberately deferred to M5.5; M5.4 ends
 configured-and-ready. M5.5 completes the desktop workflow: clicking **Convert**
 runs the configured `ConversionRequest` through
 `ConversionApplication.convert` **in the background** on a dedicated
-`QThread` worker (no cancellation in M5.5) so the window stays responsive. The
-worker reports stage-level progress and the final result (or failure) back to
+`QThread` worker (no cancellation in M5.5) so the window stays responsive.
+The worker reports stage-level progress and the final result (or failure) back to
 the window through Qt queued signals; the UI reflects it with three new
 `UiState` values (converting → completed / conversion failed), a progress bar
 (indeterminate while converting, full on success, reset on failure), status
@@ -50,23 +50,21 @@ to finish safely. The UI remains a thin presentation layer: the worker (and
 thus conversion) still only ever calls the M5.1 application API, and the core
 library never imports PySide6.
 
-M5.6 presents the outcome of a completed conversion and adds tested output
-actions. After a successful run the window shows a **results section** built
-entirely from the real application-layer `ConversionResult`: the status, the
-output format derived from `requested_formats`, and the exact `epub_path` /
-`azw3_path`. Every displayed value is read from the retained result object —
-nothing is recomputed or rerun. If the result carries an
-`EPUBValidationResult`, its status (valid/invalid), warning/error counts, and
-the structured issue messages are shown as a **validation section**; a result
-with validation disabled reports "Not run". The UI never reruns validation, and
-no second result model exists. **Open EPUB / Open AZW3 / Open Folder** buttons
-open the real output paths through an injectable platform seam
-(`kindle_converter.ui.platform.open_path`, replaced by recording doubles in
-tests); failures (missing output, failed platform open) are shown locally and
-never crash the window or modify the result. Stale results are protected: a
-previous result is cleared when the input, the output format, or the output
-directory changes, and when a new conversion starts, so an old result is never
-presented as the current request's.
+M5.7 adds an application-owned temporary workspace for every conversion.
+Each call to `ConversionApplication.convert` creates an isolated temporary
+directory (via `tempfile.TemporaryDirectory`) that exists only for the
+lifetime of that conversion: it is created on entry and deterministically
+cleaned up on exit -- successfully, or on any failure path (expected
+application errors, validation failures, unexpected exceptions). The
+workspace is owned by the application/conversion layer, never by the GUI
+or the worker. Its ``path`` attribute is exposed to application code that
+needs intermediate artifacts. The workspace is deliberately **not** the
+user's selected output directory: final artifacts (EPUB, AZW3) live in
+the output directory the user chose, and workspace cleanup never touches
+that directory. A workspace creation failure raises
+:class:`kindle_converter.application.errors.WorkspaceError` (an
+:class:`ApplicationError` subclass); a cleanup failure is logged as a
+warning but never replaces the original conversion failure.
 
 ## Goals
 
@@ -182,12 +180,13 @@ src/
     │   ├── azw3.py        # M4.3: EPUB → AZW3 conversion API
     │   └── calibre.py     # M4.3: Calibre ebook-convert backend
     │
-    ├── application/       # M5.1: UI-independent conversion use case
+    ├──     application/       # M5.1: UI-independent conversion use case
     │   ├── converter.py   # ConversionApplication: analyze_pdf (M5.3) / validate_request (M5.4) / convert
     │   ├── request.py     # ConversionRequest / OutputFormat
     │   ├── result.py      # ConversionResult
     │   ├── progress.py    # ConversionStage / ConversionProgress / callback
-    │   └── errors.py      # ApplicationError boundary (subclasses PipelineError)
+    │   ├── errors.py      # ApplicationError boundary (subclasses PipelineError)
+    │   └── workspace.py   # M5.7: application-owned temporary workspace per conversion
     │
     ├── ui/                # M5.2-M5.6: PySide6 desktop UI (ui extra)
     │   ├── app.py         #   application entry point (create_application / main)
@@ -937,6 +936,10 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
 * [x] Output actions (M5.6 — **Open EPUB / Open AZW3 / Open Folder** open the
   real output paths through the injectable `kindle_converter.ui.platform`
   seam; missing outputs and platform-open failures surface locally)
+* [x] Errors + Temporary Files (M5.7 — application-owned temporary workspace
+  for every conversion: creation on entry, deterministic cleanup on exit,
+  `WorkspaceError` for creation failures, cleanup failures logged but never
+  replacing the original conversion failure)
 * [ ] Error reporting
 * [ ] Output directory management
 

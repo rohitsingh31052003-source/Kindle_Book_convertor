@@ -55,10 +55,12 @@ from .errors import (
     InvalidRequestError,
     OutputError,
     ValidationFailedError,
+    WorkspaceError,
 )
 from .progress import ConversionProgress, ConversionStage, ProgressCallback
 from .request import ConversionRequest, OutputFormat, PathLike
 from .result import ConversionResult
+from .workspace import ConversionWorkspace
 
 __all__ = ["ConversionApplication"]
 
@@ -292,6 +294,9 @@ class ConversionApplication:
         AZW3OutputError
             The optional AZW3 conversion failed; the EPUB is still produced
             (``epub_path``) and the M4.3 cause is chained as ``__cause__``.
+        WorkspaceError
+            A temporary workspace could not be created before conversion
+            started.
         """
         input_path = self._resolve_input(request)
         output_dir = self._resolve_output_directory(request)
@@ -299,6 +304,27 @@ class ConversionApplication:
         self._resolve_azw3(request)
         progress_reporter = _Progress(progress)
 
+        workspace = ConversionWorkspace()
+        try:
+            with workspace:
+                return self._convert(
+                    request,
+                    input_path,
+                    output_dir,
+                    cover_image,
+                    progress_reporter,
+                )
+        finally:
+            workspace.cleanup()
+
+    def _convert(
+        self,
+        request: ConversionRequest,
+        input_path: Path,
+        output_dir: Path,
+        cover_image: Image | None,
+        progress_reporter: _Progress,
+    ) -> ConversionResult:
         # --- ANALYSIS -----------------------------------------------------
         progress_reporter.start(ConversionStage.ANALYSIS, "Analyzing the PDF")
         try:
@@ -313,7 +339,7 @@ class ConversionApplication:
             current=analysis.page_count,
             total=analysis.page_count,
         )
-                # --- EPUB (PDF -> Book -> EPUB) -----------------------------------
+        # --- EPUB (PDF -> Book -> EPUB) -----------------------------------
         epub_path = output_dir / f"{input_path.stem}.epub"
         progress_reporter.start(
             ConversionStage.EPUB,
