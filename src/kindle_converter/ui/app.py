@@ -1,11 +1,10 @@
-"""UI application entry point (M5.2).
+"""UI application entry point (M5.2, extended M5.3).
 
-``main`` launches the desktop application shell and returns the Qt event-loop
-exit code. It performs no conversion, PDF analysis, OCR initialization, or
-filesystem access, and it never constructs :class:`ConversionApplication` just
-for startup. :func:`create_application` returns the process-wide
-``QApplication``, creating it on first use, so later milestones can reuse the
-same instance from worker-driven UI code.
+``main`` launches the desktop application and returns the Qt event-loop exit
+code. It performs no conversion, PDF analysis, OCR initialization, or
+filesystem access at startup. :func:`create_application` returns the
+process-wide ``QApplication``, creating it on first use, so later milestones
+can reuse the same instance from worker-driven UI code.
 """
 
 from __future__ import annotations

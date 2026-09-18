@@ -597,3 +597,104 @@ class TestEndToEnd:
             ConversionStage.COMPLETE,
         } <= stages_seen
 
+
+# --------------------------------------------------------------------------
+# M5.3 analysis-only API
+# --------------------------------------------------------------------------
+
+
+def _explode(*args, **kwargs) -> object:
+    raise AssertionError("analyze_pdf must not be called for invalid input")
+
+
+class TestAnalysisOnly:
+    """The M5.3 analysis-only half of the application boundary."""
+
+    def test_analyze_pdf_returns_the_existing_analysis_type(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        import kindle_converter.application.converter as conv
+
+        analysis = _analysis(pages=3)
+        calls: list[Path] = []
+
+        def fake_analyze(source):
+            calls.append(Path(source))
+            return analysis
+
+        monkeypatch.setattr(conv, "analyze_pdf", fake_analyze)
+        result = ConversionApplication().analyze_pdf(_request(tmp_path).input_pdf)
+        assert result is analysis
+        assert isinstance(result, PDFAnalysis)
+        assert calls == [tmp_path / "book.pdf"]
+
+    def test_analyze_pdf_never_starts_conversion(self, tmp_path, monkeypatch) -> None:
+        pipeline = _FakePipeline(monkeypatch, tmp_path)
+        result = ConversionApplication().analyze_pdf(_request(tmp_path).input_pdf)
+        assert isinstance(result, PDFAnalysis)
+        assert pipeline.epub_calls == []
+        assert pipeline.validation_calls == []
+
+    def test_analyze_pdf_missing_input_is_rejected(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        import kindle_converter.application.converter as conv
+
+        monkeypatch.setattr(conv, "analyze_pdf", _explode)
+        request = _request(tmp_path)
+        request.input_pdf.unlink()
+        with pytest.raises(InvalidRequestError, match="does not exist"):
+            ConversionApplication().analyze_pdf(request.input_pdf)
+
+    def test_analyze_pdf_directory_input_is_rejected(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        import kindle_converter.application.converter as conv
+
+        monkeypatch.setattr(conv, "analyze_pdf", _explode)
+        directory = tmp_path / "dir.pdf"
+        directory.mkdir()
+        with pytest.raises(InvalidRequestError, match="not a regular file"):
+            ConversionApplication().analyze_pdf(directory)
+
+    def test_analyze_pdf_non_path_input_is_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(InvalidRequestError, match="input_pdf must be a filesystem path"):
+            ConversionApplication().analyze_pdf(12345)  # type: ignore[arg-type]
+
+    def test_analyze_pdf_failure_chains_cause(self, tmp_path, monkeypatch) -> None:
+        cause = PDFReadError("corrupt pdf")
+        _FakePipeline(monkeypatch, tmp_path, analysis_error=cause)
+        with pytest.raises(ConversionFailedError) as exc_info:
+            ConversionApplication().analyze_pdf(_request(tmp_path).input_pdf)
+        assert exc_info.value.__cause__ is cause
+        assert exc_info.value.stage is ConversionStage.ANALYSIS
+
+    def test_analyze_pdf_unexpected_error_propagates(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        class _Boom(Exception):
+            pass
+
+        _FakePipeline(monkeypatch, tmp_path, analysis_error=_Boom("boom"))
+        with pytest.raises(_Boom, match="boom"):
+            ConversionApplication().analyze_pdf(_request(tmp_path).input_pdf)
+
+    def test_analyze_pdf_real_pdf_end_to_end(self, tmp_path: Path) -> None:
+        """One real-pipeline test: analysis-only returns a real PDFAnalysis."""
+        pdf = tmp_path / "real.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        page.insert_textbox(
+            pymupdf.Rect(72, 200, 500, 700),
+            "Body text line one. Another sentence follows to give "
+            "the page meaningful content.",
+            fontname="helv",
+            fontsize=12,
+        )
+        doc.save(str(pdf))
+        doc.close()
+        analysis = ConversionApplication().analyze_pdf(pdf)
+        assert analysis.page_count == 1
+        assert analysis.document_type is PDFType.TEXT
+        assert analysis.text_page_count == 1
+

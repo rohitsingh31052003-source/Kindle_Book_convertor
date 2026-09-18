@@ -77,9 +77,14 @@ Formal EPUB validation (M4.2), EPUB -> AZW3 conversion (M4.3), cover handling
 M5.2 adds the PySide6 desktop application shell (:mod:`kindle_converter.ui`,
 optional ``ui`` extra). The core package never imports PySide6:
 ``import kindle_converter`` works in a base installation. After installing the
-``ui`` extra, launch the shell with ``python -m kindle_converter.ui``. M5.2 is
-only the application shell; the conversion workflow is introduced in later M5
-milestones.
+``ui`` extra, launch the shell with ``python -m kindle_converter.ui``.
+
+M5.3 adds the first real desktop workflow on top of that shell: the window can
+select a PDF, analyze it through the application boundary
+(:meth:`~kindle_converter.application.ConversionApplication.analyze_pdf`),
+and display the M3.1 analysis summary (page count, document type, text/scanned/
+mixed pages, OCR requirement). No conversion happens yet; conversion execution
+is deferred to later M5 milestones.
 """
 
 from .pipeline import convert_pdf_to_book, convert_pdf_to_epub

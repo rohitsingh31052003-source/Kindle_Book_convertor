@@ -1,10 +1,11 @@
-"""Tests for the M5.2 PySide6 UI foundation.
+"""Tests for the M5.2/M5.3 PySide6 UI foundation.
 
 All Qt-dependent tests run headless via ``QT_QPA_PLATFORM=offscreen`` so they
 never require a display or a physical screen. The module skips cleanly when
 PySide6 is not installed (the ``ui`` extra is absent). The companion file
 ``test_ui_boundary.py`` tests the architectural dependency guarantees without
-importing PySide6 and always runs.
+importing PySide6 and always runs. The M5.3 input-selection and analysis
+workflow is exercised in ``test_ui_input_analysis.py``.
 
 ``QT_QPA_PLATFORM`` must be set before PySide6 loads its platform plugin, so
 it is configured at module import time before any Qt symbol is touched.
@@ -135,20 +136,23 @@ class TestMainWindow:
         finally:
             window.close()
 
-    def test_placeholder_content_exists(self, qapp: QtWidgets.QApplication) -> None:
+    def test_input_section_content_exists(self, qapp: QtWidgets.QApplication) -> None:
         window = MainWindow()
         try:
             title = window.findChild(QtWidgets.QLabel, "appTitle")
             subtitle = window.findChild(QtWidgets.QLabel, "subtitle")
-            placeholder = window.findChild(
-                QtWidgets.QLabel, "conversionPlaceholder"
-            )
+            input_title = window.findChild(QtWidgets.QLabel, "inputSectionTitle")
+            path_edit = window.findChild(QtWidgets.QLineEdit, "inputPath")
+            browse = window.findChild(QtWidgets.QPushButton, "browseButton")
+            analyze = window.findChild(QtWidgets.QPushButton, "analyzeButton")
+            status = window.findChild(QtWidgets.QLabel, "statusLabel")
             assert title is not None and title.text() == APP_TITLE
             assert subtitle is not None and "Kindle" in subtitle.text()
             assert subtitle is not None and "PDF" in subtitle.text()
-            assert (
-                placeholder is not None
-                and placeholder.text() == "Conversion controls coming next"
-            )
+            assert input_title is not None
+            assert path_edit is not None and path_edit.text() == ""
+            assert browse is not None and "Browse" in browse.text()
+            assert analyze is not None and "Analyze" in analyze.text()
+            assert status is not None and status.text()
         finally:
             window.close()

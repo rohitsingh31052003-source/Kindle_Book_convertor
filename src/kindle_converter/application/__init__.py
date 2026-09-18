@@ -26,6 +26,12 @@ Typical usage::
     )
     print(result.epub_path, result.azw3_path)
 
+Since M5.3 the application also exposes the analysis-only half of the use
+case, so a UI can inspect a PDF before offering a conversion::
+
+    analysis = ConversionApplication().analyze_pdf("book.pdf")
+    print(analysis.page_count, analysis.document_type)
+
 Architecture
 ------------
 The application layer owns the **use case**, not the document-processing

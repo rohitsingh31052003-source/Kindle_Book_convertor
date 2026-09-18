@@ -1,9 +1,12 @@
-"""Application-level conversion orchestration (M5.1).
+"""Application-level conversion orchestration (M5.1, analysis added M5.3).
 
 :class:`ConversionApplication` is the stable UI-independent boundary that
 composes the existing M1--M4 stage functions into the user-facing use case:
 analyze a PDF, produce an EPUB, validate it, and optionally convert it to
-AZW3, while reporting progress. It holds no PDF, OCR, reconstruction, EPUB,
+AZW3, while reporting progress. Since M5.3 it also exposes the analysis-only
+half of that workflow, :meth:`ConversionApplication.analyze_pdf`, so a UI can
+inspect a PDF - page count, document type, per-page classifications - before
+any conversion starts. It holds no PDF, OCR, reconstruction, EPUB,
 validation, cover, or AZW3 algorithm of its own -- those stay in their
 existing modules. Stateless and safe to call from a worker thread (M5.1
 defines no threading).
@@ -35,9 +38,10 @@ from ..pdf import (
     OCREngine,
     OCRError,
     OCREngineUnavailableError,
-    PageRenderer,
+    PDFAnalysis,
     PDFReadError,
     PDFRenderingError,
+    PageRenderer,
     analyze_pdf,
 )
 from ..pipeline import convert_pdf_to_epub
@@ -49,7 +53,7 @@ from .errors import (
     ValidationFailedError,
 )
 from .progress import ConversionProgress, ConversionStage, ProgressCallback
-from .request import ConversionRequest, OutputFormat
+from .request import ConversionRequest, OutputFormat, PathLike
 from .result import ConversionResult
 
 __all__ = ["ConversionApplication"]
@@ -103,13 +107,62 @@ class ConversionApplication:
         self._renderer = renderer
         self._azw3_backend = azw3_backend
 
-    @staticmethod
-    def _resolve_input(request: ConversionRequest) -> Path:
+    def analyze_pdf(self, input_pdf: PathLike) -> PDFAnalysis:
+        """Analyze one PDF and return its analysis, without converting.
+
+        This is the analysis-only half of :meth:`convert` (M5.3): it validates
+        the input with the exact same path checks (and the same
+        :class:`InvalidRequestError` boundary), runs the existing M3.1
+        :func:`~kindle_converter.pdf.analyze_pdf` implementation, and returns
+        its structured :class:`~kindle_converter.pdf.PDFAnalysis` unchanged.
+        No EPUB/AZW3 stage runs, nothing is written, and the OCR/renderer
+        injection seams are never involved. A UI can display
+        ``analysis.page_count``, ``analysis.document_type``, and the
+        per-page classifications before offering a conversion.
+
+        Parameters
+        ----------
+        input_pdf:
+            A filesystem path to a readable PDF file (``str`` or
+            ``os.PathLike``).
+
+        Returns
+        -------
+        PDFAnalysis
+            The existing M3.1 analysis type: page count, text density,
+            document type, and per-page ``PageAnalysis`` rows.
+
+        Raises
+        ------
+        InvalidRequestError
+            ``input_pdf`` is not a filesystem path, does not exist, is not a
+            regular file, or cannot be read.
+        ConversionFailedError
+            The PDF could not be analyzed; the originating
+            ``PDFReadError``/``EmptyPDFError``/``NoContentError`` is chained as
+            ``__cause__`` and ``stage`` is ``ConversionStage.ANALYSIS``.
+        """
+        input_path = self._resolve_input_path(input_pdf)
         try:
-            path = Path(os.fspath(request.input_pdf))
+            return analyze_pdf(input_path)
+        except (PDFReadError, EmptyPDFError, NoContentError) as exc:
+            raise ConversionFailedError(
+                f"PDF analysis failed: {exc}", stage=ConversionStage.ANALYSIS
+            ) from exc
+
+    @staticmethod
+    def _resolve_input_path(input_pdf: PathLike) -> Path:
+        """Validate a bare input path the same way ``convert`` validates one.
+
+        Shared by :meth:`convert` (via :meth:`_resolve_input`) and the
+        analysis-only API :meth:`analyze_pdf`, so both boundary operations
+        reject bad input identically (:class:`InvalidRequestError`).
+        """
+        try:
+            path = Path(os.fspath(input_pdf))
         except TypeError as exc:
             raise InvalidRequestError(
-                f"input_pdf must be a filesystem path, got {type(request.input_pdf).__name__}"
+                f"input_pdf must be a filesystem path, got {type(input_pdf).__name__}"
             ) from exc
         if not path.exists():
             raise InvalidRequestError(f"the input PDF {str(path)!r} does not exist")
@@ -120,6 +173,10 @@ class ConversionApplication:
         except OSError as exc:
             raise InvalidRequestError(f"the input PDF {str(path)!r} cannot be read: {exc}") from exc
         return path
+
+    @staticmethod
+    def _resolve_input(request: ConversionRequest) -> Path:
+        return ConversionApplication._resolve_input_path(request.input_pdf)
 
     @staticmethod
     def _resolve_output_directory(request: ConversionRequest) -> Path:

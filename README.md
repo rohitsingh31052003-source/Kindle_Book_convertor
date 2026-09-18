@@ -6,9 +6,9 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 5 — User Interface (M5.2 — PySide6 application shell complete)
+**Development stage:** Milestone 5 — User Interface (M5.3 — PDF input selection and analysis UI complete)
 
-The project now has a working conversion engine with deterministic
+The project has a working conversion engine with deterministic
 validation. PDF analysis, layout-aware reconstruction (reading order,
 paragraphs, headings, chapters, page-number and header/footer removal,
 metadata, images), OCR-aware processing for scanned and mixed PDFs,
@@ -16,13 +16,19 @@ Kindle-oriented EPUB generation, structural EPUB validation, EPUB → AZW3
 conversion (via Calibre's `ebook-convert`), explicit optional cover
 handling, and Kindle-specific reflowable formatting improvements are
 implemented and covered by a deterministic test suite. The UI-independent
-application / pipeline API (M5.1, `kindle_converter.application`) now wraps
-the full conversion use case behind a stable boundary for the upcoming
-graphical interface. M5.2 starts the graphical interface itself: an optional
-PySide6 desktop application shell (`kindle_converter.ui`, the `ui` extra) —
-a launchable main window and entry point that establishes the UI layer. The
-conversion workflow (file selection, analysis, progress, results) comes in
-later M5 milestones; M5.2 is the application shell only.
+application / pipeline API (M5.1, `kindle_converter.application`) wraps
+the conversion use case behind a stable boundary for the graphical
+interface. M5.2 added the optional PySide6 desktop application shell
+(`kindle_converter.ui`, the `ui` extra): a launchable main window and
+entry point (`python -m kindle_converter.ui`). M5.3 implements the first
+real desktop workflow on top of that shell: the window can select a PDF
+from a file picker, analyze it through the application API (never by
+reading the PDF itself and never by calling the pipeline directly), and
+display a useful summary (page count, document type, text/scanned/mixed
+page counts, OCR requirement) with explicit UI states and clean
+validation/error handling. Conversion execution (progress, output
+selection, results) is deliberately deferred to later M5 milestones;
+M5.3 ends analyzed-and-ready.
 
 ## Goals
 
@@ -139,15 +145,15 @@ src/
     │   └── calibre.py     # M4.3: Calibre ebook-convert backend
     │
     ├── application/       # M5.1: UI-independent conversion use case
-    │   ├── converter.py   # ConversionApplication: analyze → EPUB → validate → AZW3
+    │   ├── converter.py   # ConversionApplication: analyze_pdf (M5.3) / convert
     │   ├── request.py     # ConversionRequest / OutputFormat
     │   ├── result.py      # ConversionResult
     │   ├── progress.py    # ConversionStage / ConversionProgress / callback
     │   └── errors.py      # ApplicationError boundary (subclasses PipelineError)
     │
-    ├── ui/                # M5.2: PySide6 desktop application shell (ui extra)
+    ├── ui/                # M5.2/M5.3: PySide6 desktop UI (ui extra)
     │   ├── app.py         #   application entry point (create_application / main)
-    │   ├── main_window.py #   main window shell
+    │   ├── main_window.py #   input selection + PDF analysis window (UiState model)
     │   └── __main__.py    #   python -m kindle_converter.ui
     │
     └── pipeline.py
@@ -250,12 +256,11 @@ pytest
 For full development setup (including the runtime dependencies), use the
 editable install described above.
 
-### Desktop UI (M5.2)
+### Desktop UI (M5.2 shell, M5.3 input selection + analysis)
 
-The desktop application shell is a PySide6 foundation
-(`kindle_converter.ui`). PySide6 is an **optional** dependency (the `ui`
-extra): the core library never imports it, so `import kindle_converter` keeps
-working in a base installation.
+The desktop application is a PySide6 UI (`kindle_converter.ui`). PySide6 is an
+**optional** dependency (the `ui` extra): the core library never imports it,
+so `import kindle_converter` keeps working in a base installation.
 
 Install the UI extra:
 
@@ -263,17 +268,32 @@ Install the UI extra:
 pip install -e ".[ui]"
 ```
 
-Launch the desktop application shell:
+Launch the desktop application:
 
 ```bash
 python -m kindle_converter.ui
 ```
 
-M5.2 is only the application shell: the window launches with the application
-identity and a placeholder area, but it does **not** convert PDFs, select
-files, run analysis, or show progress yet. The actual conversion workflow is
-introduced in later M5 milestones; the M5.1 application / pipeline API remains
-the boundary the UI will drive.
+M5.3 implements the first desktop workflow: select a PDF with the file picker,
+see the selected path, run **Analyze PDF**, and read a summary of the M3.1
+analysis (page count, document type, text/scanned/mixed page counts, and
+whether OCR is required). The window tracks an explicit small state model
+(`UiState`: no input → input selected → analyzing → analysis complete /
+analysis failed), invalidates stale analysis when the input changes, and
+translates validation and analysis failures into user-readable status messages
+while staying usable for a retry.
+
+The UI is a thin presentation layer: analysis is always invoked through the
+M5.1 application API (`ConversionApplication.analyze_pdf`), never by importing
+or calling the PDF/pipeline implementation from the UI, and no PDF is ever
+opened just to populate the path display. Analysis runs synchronously in M5.3
+(no `QThread`, no background workers); a later milestone moves conversion work
+off the event loop without moving PDF/business logic into the UI.
+
+M5.3 performs **no conversion** and adds no conversion UI (no progress, no
+output/format/cover selection, no results screen). After a successful analysis
+the window is ready for that later conversion workflow; nothing else happens.
+The M5.1 application / pipeline API remains the boundary the UI drives.
 
 ### OCR (scanned PDFs)
 
@@ -740,6 +760,10 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   application error boundary)
 * [x] PySide6 application shell (M5.2 — optional `ui` extra,
   `kindle_converter.ui` main window + entry point; no conversion workflow yet)
+* [x] Input selection + PDF analysis UI (M5.3 — select a PDF, analyze it
+  through `ConversionApplication.analyze_pdf`, display the M3.1 analysis
+  summary; explicit UI states and clean validation/error handling; no
+  conversion yet)
 * [ ] Simple desktop interface
 * [ ] Drag-and-drop input
 * [ ] Output format selection
