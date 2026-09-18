@@ -6,7 +6,11 @@ analyze a PDF, produce an EPUB, validate it, and optionally convert it to
 AZW3, while reporting progress. Since M5.3 it also exposes the analysis-only
 half of that workflow, :meth:`ConversionApplication.analyze_pdf`, so a UI can
 inspect a PDF - page count, document type, per-page classifications - before
-any conversion starts. It holds no PDF, OCR, reconstruction, EPUB,
+any conversion starts. Since M5.4 it also exposes
+:meth:`ConversionApplication.validate_request`, the same pre-flight path
+checks ``convert`` performs without analyzing or writing anything, so a UI can
+gate its start action on a valid configuration without executing conversion.
+It holds no PDF, OCR, reconstruction, EPUB,
 validation, cover, or AZW3 algorithm of its own -- those stay in their
 existing modules. Stateless and safe to call from a worker thread (M5.1
 defines no threading).
@@ -219,6 +223,35 @@ class ConversionApplication:
             raise InvalidRequestError(
                 f"calibre_path {str(path)!r} is not an executable file (AZW3 requested)"
             )
+
+    def validate_request(self, request: ConversionRequest) -> None:
+        """Validate a request without running any conversion (M5.4).
+
+        Runs exactly the same pre-flight path checks :meth:`convert` performs
+        up front -- readable input PDF, existing output directory, resolvable
+        cover, and the explicit-Calibre-path pre-check -- and raises
+        :class:`InvalidRequestError` on the first problem. Nothing is
+        analyzed, no EPUB/AZW3 artifact is produced, and no progress is
+        emitted, so a UI can gate its start button on this method without
+        executing conversion.
+
+        Parameters
+        ----------
+        request:
+            The :class:`ConversionRequest` whose paths/configuration should be
+            validated.
+
+        Raises
+        ------
+        InvalidRequestError
+            A missing/unreadable input, a missing/non-directory output
+            directory, an unsupported cover, or a non-existent explicit
+            Calibre path.
+        """
+        self._resolve_input(request)
+        self._resolve_output_directory(request)
+        self._resolve_cover(request)
+        self._resolve_azw3(request)
 
     def convert(
         self, request: ConversionRequest, *, progress: ProgressCallback | None = None

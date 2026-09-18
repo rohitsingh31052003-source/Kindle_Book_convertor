@@ -260,6 +260,58 @@ class TestRequestValidation:
 
 
 # --------------------------------------------------------------------------
+# M5.4 request validation without conversion
+# --------------------------------------------------------------------------
+
+
+class TestValidateRequest:
+    """``ConversionApplication.validate_request`` validates a request's pre-flight
+    path checks without running any conversion (M5.4)."""
+
+    def test_valid_request_passes(self, tmp_path: Path, monkeypatch) -> None:
+        _FakePipeline(monkeypatch, tmp_path)
+        request = _request(tmp_path)
+        assert ConversionApplication().validate_request(request) is None
+
+    def test_missing_input_rejected(self, tmp_path: Path) -> None:
+        request = _request(tmp_path)
+        request.input_pdf.unlink()
+        with pytest.raises(InvalidRequestError, match="does not exist"):
+            ConversionApplication().validate_request(request)
+
+    def test_missing_output_directory_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(InvalidRequestError, match="output directory"):
+            ConversionApplication().validate_request(
+                _request(tmp_path, output_directory=tmp_path / "missing")
+            )
+
+    def test_invalid_cover_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(InvalidRequestError, match="cover"):
+            ConversionApplication().validate_request(
+                _request(tmp_path, cover=tmp_path / "no-such-cover.png")
+            )
+
+    def test_azw3_missing_calibre_precheck(self, tmp_path: Path) -> None:
+        with pytest.raises(InvalidRequestError, match="calibre_path"):
+            ConversionApplication().validate_request(
+                _request(
+                    tmp_path,
+                    formats=frozenset({OutputFormat.EPUB, OutputFormat.AZW3}),
+                    calibre_path=tmp_path / "no-such-calibre.exe",
+                )
+            )
+
+    def test_validation_executes_no_conversion(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        pipeline = _FakePipeline(monkeypatch, tmp_path)
+        ConversionApplication().validate_request(_request(tmp_path))
+        assert pipeline.analysis_calls == []
+        assert pipeline.epub_calls == []
+        assert pipeline.validation_calls == []
+
+
+# --------------------------------------------------------------------------
 # Orchestration (fakes stand in for the M1--M4 stages)
 # --------------------------------------------------------------------------
 

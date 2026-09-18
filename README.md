@@ -6,7 +6,7 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 5 — User Interface (M5.3 — PDF input selection and analysis UI complete)
+**Development stage:** Milestone 5 — User Interface (M5.4 — conversion options + cover handling UI complete)
 
 The project has a working conversion engine with deterministic
 validation. PDF analysis, layout-aware reconstruction (reading order,
@@ -26,9 +26,17 @@ from a file picker, analyze it through the application API (never by
 reading the PDF itself and never by calling the pipeline directly), and
 display a useful summary (page count, document type, text/scanned/mixed
 page counts, OCR requirement) with explicit UI states and clean
-validation/error handling. Conversion execution (progress, output
-selection, results) is deliberately deferred to later M5 milestones;
-M5.3 ends analyzed-and-ready.
+validation/error handling. M5.4 adds the configuration step between
+analysis and conversion: after analyzing a PDF, the user picks an output
+format (EPUB or AZW3), an output directory, and an optional cover, and the
+window summarizes the result into a real application-layer
+`ConversionRequest`, tracking an explicit readiness model
+(not configured → configuring → ready for conversion). M5.4 performs **no
+conversion**: request construction and readiness validation are
+synchronous, non-executing, and worker-free; ``ConversionApplication.convert``
+is never invoked from normal UI interaction. Conversion execution (progress,
+output, results) is deliberately deferred to M5.5; M5.4 ends
+configured-and-ready.
 
 ## Goals
 
@@ -145,15 +153,15 @@ src/
     │   └── calibre.py     # M4.3: Calibre ebook-convert backend
     │
     ├── application/       # M5.1: UI-independent conversion use case
-    │   ├── converter.py   # ConversionApplication: analyze_pdf (M5.3) / convert
+    │   ├── converter.py   # ConversionApplication: analyze_pdf (M5.3) / validate_request (M5.4) / convert
     │   ├── request.py     # ConversionRequest / OutputFormat
     │   ├── result.py      # ConversionResult
     │   ├── progress.py    # ConversionStage / ConversionProgress / callback
     │   └── errors.py      # ApplicationError boundary (subclasses PipelineError)
     │
-    ├── ui/                # M5.2/M5.3: PySide6 desktop UI (ui extra)
+    ├── ui/                # M5.2/M5.3/M5.4: PySide6 desktop UI (ui extra)
     │   ├── app.py         #   application entry point (create_application / main)
-    │   ├── main_window.py #   input selection + PDF analysis window (UiState model)
+    │   ├── main_window.py #   input selection + analysis + conversion options (UiState model)
     │   └── __main__.py    #   python -m kindle_converter.ui
     │
     └── pipeline.py
@@ -256,7 +264,7 @@ pytest
 For full development setup (including the runtime dependencies), use the
 editable install described above.
 
-### Desktop UI (M5.2 shell, M5.3 input selection + analysis)
+### Desktop UI (M5.2 shell, M5.3 input selection + analysis, M5.4 conversion options)
 
 The desktop application is a PySide6 UI (`kindle_converter.ui`). PySide6 is an
 **optional** dependency (the `ui` extra): the core library never imports it,
@@ -283,17 +291,45 @@ analysis failed), invalidates stale analysis when the input changes, and
 translates validation and analysis failures into user-readable status messages
 while staying usable for a retry.
 
-The UI is a thin presentation layer: analysis is always invoked through the
-M5.1 application API (`ConversionApplication.analyze_pdf`), never by importing
-or calling the PDF/pipeline implementation from the UI, and no PDF is ever
-opened just to populate the path display. Analysis runs synchronously in M5.3
-(no `QThread`, no background workers); a later milestone moves conversion work
-off the event loop without moving PDF/business logic into the UI.
+M5.4 adds the conversion-options step (select → analyze → configure → ready):
 
-M5.3 performs **no conversion** and adds no conversion UI (no progress, no
-output/format/cover selection, no results screen). After a successful analysis
-the window is ready for that later conversion workflow; nothing else happens.
-The M5.1 application / pipeline API remains the boundary the UI drives.
+* **Output format.** A combo offers **EPUB** and **AZW3**; both map to the
+  existing application-layer `OutputFormat` enum (`epub` default). Per the
+  application contract an EPUB is always produced and AZW3 is an additional
+  artifact, so selecting AZW3 means `formats = {EPUB, AZW3}`.
+* **Output directory.** A native directory picker stores and displays the
+  selected directory; cancelling preserves the current selection and nothing
+  is created on disk just by selecting it.
+* **Optional cover.** A native image picker filters to the image types the
+  existing M4.4 `load_cover` implementation accepts (JPEG, PNG, GIF, SVG).
+  The selection can be cleared. No image processing happens in the UI — the
+  application layer (M4.4 cover handling) owns loading and validation.
+* **Request construction.** `MainWindow.build_conversion_request()` reads the
+  current UI state and constructs the real
+  `kindle_converter.application.ConversionRequest` (input PDF, output
+  directory, output formats, optional cover, default validation settings). No
+  UI-specific request object exists.
+* **Readiness model.** After a successful analysis the window is
+  *configuring*; a configuration becomes **ready for conversion** only when an
+  analyzed input, an output directory, and a valid format are present and any
+  supplied cover is acceptable. Readiness is decided by application-layer
+  validation: `ConversionApplication.validate_request()` (added for M5.4) runs
+  the same pre-flight path checks `convert` performs — readable input,
+  existing output directory, resolvable cover, explicit Calibre path — without
+  executing or analyzing anything.
+* **Input change invalidation.** Selecting a different PDF clears the previous
+  analysis and any readiness while retaining the independent configuration
+  selections (output directory/format/cover), so a request can never refer to
+  a stale, previously analyzed PDF.
+
+M5.4 performs **no conversion**: changing the format, picking a directory or a
+cover, or building the request never invokes `ConversionApplication.convert`
+or any lower-level conversion function, and no `QThread`/worker, no progress
+UI, and no result/validation presentation are introduced. The UI remains a thin
+presentation layer: analysis and configuration validation always go through the
+M5.1 application API, never by importing or calling the PDF/pipeline
+implementation from the UI. Everything is synchronous for now; background
+conversion execution is reserved for M5.5.
 
 ### OCR (scanned PDFs)
 
@@ -764,9 +800,17 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   through `ConversionApplication.analyze_pdf`, display the M3.1 analysis
   summary; explicit UI states and clean validation/error handling; no
   conversion yet)
+* [x] Conversion options + cover handling UI (M5.4 — output format EPUB/AZW3,
+  output directory picker, optional cover selection, and construction of the
+  real application-layer `ConversionRequest` via
+  `MainWindow.build_conversion_request`; explicit `UiState` readiness
+  (configuring → ready for conversion) gated by the new non-executing
+  `ConversionApplication.validate_request`; no conversion execution yet)
 * [ ] Simple desktop interface
 * [ ] Drag-and-drop input
 * [ ] Output format selection
+* [ ] Conversion execution (M5.5 — run the configured `ConversionRequest` in
+  the background)
 * [ ] Conversion progress
 * [ ] Error reporting
 * [ ] Output directory management

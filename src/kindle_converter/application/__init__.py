@@ -32,6 +32,19 @@ case, so a UI can inspect a PDF before offering a conversion::
     analysis = ConversionApplication().analyze_pdf("book.pdf")
     print(analysis.page_count, analysis.document_type)
 
+Since M5.4 the application also exposes :meth:`ConversionApplication.validate_request`,
+which runs the same pre-flight path checks ``convert`` performs (input PDF,
+output directory, cover, explicit Calibre path) without analyzing, writing,
+or executing any conversion -- so a UI can decide whether its current
+configuration is ready without risking a conversion::
+
+    request = ConversionRequest(
+        input_pdf="book.pdf",
+        output_directory="out",
+        formats={OutputFormat.EPUB},
+    )
+    ConversionApplication().validate_request(request)
+
 Architecture
 ------------
 The application layer owns the **use case**, not the document-processing
