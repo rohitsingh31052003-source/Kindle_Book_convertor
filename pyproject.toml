@@ -41,6 +41,13 @@ ocr = [
     "pytesseract>=0.3.13,<1",
     "Pillow>=10.0,<13",
 ]
+# Optional desktop UI (Milestone 5.2): PySide6 for the application shell
+# (kindle_converter.ui). The core library never imports PySide6, so a base
+# installation works without it; install this extra to launch the desktop app
+# (python -m kindle_converter.ui).
+ui = [
+    "PySide6>=6.8,<7",
+]
 
 [tool.setuptools]
 package-dir = { "" = "src" }

@@ -6,7 +6,7 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 5 — User Interface (M5.1 — Application / Pipeline API complete)
+**Development stage:** Milestone 5 — User Interface (M5.2 — PySide6 application shell complete)
 
 The project now has a working conversion engine with deterministic
 validation. PDF analysis, layout-aware reconstruction (reading order,
@@ -18,7 +18,11 @@ handling, and Kindle-specific reflowable formatting improvements are
 implemented and covered by a deterministic test suite. The UI-independent
 application / pipeline API (M5.1, `kindle_converter.application`) now wraps
 the full conversion use case behind a stable boundary for the upcoming
-graphical interface.
+graphical interface. M5.2 starts the graphical interface itself: an optional
+PySide6 desktop application shell (`kindle_converter.ui`, the `ui` extra) —
+a launchable main window and entry point that establishes the UI layer. The
+conversion workflow (file selection, analysis, progress, results) comes in
+later M5 milestones; M5.2 is the application shell only.
 
 ## Goals
 
@@ -141,6 +145,11 @@ src/
     │   ├── progress.py    # ConversionStage / ConversionProgress / callback
     │   └── errors.py      # ApplicationError boundary (subclasses PipelineError)
     │
+    ├── ui/                # M5.2: PySide6 desktop application shell (ui extra)
+    │   ├── app.py         #   application entry point (create_application / main)
+    │   ├── main_window.py #   main window shell
+    │   └── __main__.py    #   python -m kindle_converter.ui
+    │
     └── pipeline.py
 ```
 
@@ -207,6 +216,7 @@ Planned core technologies include:
 * **Python 3.12+**
 * **PyMuPDF** for PDF inspection and extraction
 * **EbookLib** for EPUB generation
+* **PySide6** for the desktop UI (optional `ui` extra, Milestone 5.2)
 * **pytest** for automated testing
 
 Additional dependencies, particularly OCR-related tools, will be introduced only when they are required by the corresponding milestone.
@@ -239,6 +249,31 @@ pytest
 
 For full development setup (including the runtime dependencies), use the
 editable install described above.
+
+### Desktop UI (M5.2)
+
+The desktop application shell is a PySide6 foundation
+(`kindle_converter.ui`). PySide6 is an **optional** dependency (the `ui`
+extra): the core library never imports it, so `import kindle_converter` keeps
+working in a base installation.
+
+Install the UI extra:
+
+```bash
+pip install -e ".[ui]"
+```
+
+Launch the desktop application shell:
+
+```bash
+python -m kindle_converter.ui
+```
+
+M5.2 is only the application shell: the window launches with the application
+identity and a placeholder area, but it does **not** convert PDFs, select
+files, run analysis, or show progress yet. The actual conversion workflow is
+introduced in later M5 milestones; the M5.1 application / pipeline API remains
+the boundary the UI will drive.
 
 ### OCR (scanned PDFs)
 
@@ -703,6 +738,8 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   analysis, EPUB generation, validation, and optional AZW3; typed
   `ConversionRequest`, `ConversionResult`, progress callback, and
   application error boundary)
+* [x] PySide6 application shell (M5.2 — optional `ui` extra,
+  `kindle_converter.ui` main window + entry point; no conversion workflow yet)
 * [ ] Simple desktop interface
 * [ ] Drag-and-drop input
 * [ ] Output format selection

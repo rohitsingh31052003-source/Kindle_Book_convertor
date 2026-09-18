@@ -10,3 +10,6 @@ pytest>=8.0,<9
 # is not installed by pip (see README "OCR (scanned PDFs)").
 pytesseract>=0.3.13,<1
 Pillow>=10.0,<13
+
+# Optional desktop UI dependencies (mirrors [project.optional-dependencies].ui)
+PySide6>=6.8,<7

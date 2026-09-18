@@ -73,6 +73,13 @@ caller)::
 
 Formal EPUB validation (M4.2), EPUB -> AZW3 conversion (M4.3), cover handling
 (M4.4), and Kindle-specific formatting improvements (M4.5) are implemented.
+
+M5.2 adds the PySide6 desktop application shell (:mod:`kindle_converter.ui`,
+optional ``ui`` extra). The core package never imports PySide6:
+``import kindle_converter`` works in a base installation. After installing the
+``ui`` extra, launch the shell with ``python -m kindle_converter.ui``. M5.2 is
+only the application shell; the conversion workflow is introduced in later M5
+milestones.
 """
 
 from .pipeline import convert_pdf_to_book, convert_pdf_to_epub
