@@ -6,17 +6,17 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 4 — Kindle Output (M4.1, M4.2, M4.3 and M4.4 complete)
+**Development stage:** Milestone 4 — Kindle Output (M4.1, M4.2, M4.3, M4.4 and M4.5 complete)
 
 The project now has a working conversion engine with deterministic
 validation. PDF analysis, layout-aware reconstruction (reading order,
 paragraphs, headings, chapters, page-number and header/footer removal,
 metadata, images), OCR-aware processing for scanned and mixed PDFs,
 Kindle-oriented EPUB generation, structural EPUB validation, EPUB → AZW3
-conversion (via Calibre's `ebook-convert`), and explicit optional cover
-handling are implemented and covered by a
-deterministic test suite. Kindle-specific formatting improvements (M4.5)
-and a graphical interface are upcoming milestones.
+conversion (via Calibre's `ebook-convert`), explicit optional cover
+handling, and Kindle-specific reflowable formatting improvements are
+implemented and covered by a deterministic test suite. A graphical
+interface is an upcoming milestone.
 
 ## Goals
 
@@ -125,6 +125,7 @@ src/
     │
     ├── epub/
     │   ├── builder.py
+    │   ├── formatting.py  # M4.5: Kindle formatting profile + CSS generation
     │   ├── toc.py
     │   ├── css.py
     │   ├── validation.py
@@ -359,8 +360,8 @@ ZIP entry times) into the container; that library-side variation is documented
 rather than worked around.
 
 EPUB **validation** is M4.2 and is not part of M4.1; AZW3 conversion (M4.3),
-cover handling (M4.4), and Kindle-specific formatting improvements (M4.5) are
-likewise out of scope here.
+cover handling (M4.4), and the Kindle formatting refinements (M4.5) are
+separate milestones layered on top of it.
 
 EPUB **validation** is M4.2. It inspects the finished EPUB
 artifact independently of PDF processing and reports structured
@@ -505,6 +506,78 @@ Key facts about the M4.4 feature:
 Book → build_epub() → EPUB (cover: properties="cover-image" + name="cover" + cover.xhtml)
 ```
 
+### Kindle-specific formatting (M4.5)
+
+M4.5 refines the **output** of the existing `Book → EPUB` boundary so the
+generated EPUB reads well on a Kindle, without changing the conversion
+architecture:
+
+```text
+PDF/OCR/reconstruction → Book → Kindle-oriented EPUB builder → EPUB → (optional) AZW3
+```
+
+* **One formatting profile.** The stylesheet is no longer a set of CSS literals
+  in the builder: `kindle_converter.epub.formatting` owns a small, frozen
+  `KindleFormattingProfile` (body, paragraph, heading, chapter, image,
+  blockquote, list, and page-break values) and a pure
+  `build_stylesheet(profile)` function. `builder.STYLESHEET_CSS` is simply the
+  stylesheet the default profile produces, so the CSS has one source of truth
+  and is reproducible.
+* **Reflowable typography.** Relative units only (`em`/`%`); no `px`, `pt`,
+  `in`, `cm`, `mm`, `vh`, or `vw` anywhere. Nothing is fixed, so the reader's
+  font family and font-size controls stay effective. The body keeps a
+  conservative font stack ending in a generic family, and no font is embedded
+  (no `@font-face`, no font files).
+* **Paragraphs and headings.** Paragraphs stay semantic `<p>` with a modest
+  `1em` bottom margin, no indentation, and `1.5` line-height. Headings keep
+  their `<h1>`–`<h6>` hierarchy with relative, size-decreasing sizes, spacing
+  before/after, and conservative break avoidance (`break-after` /
+  `page-break-after: avoid`, `break-inside: avoid`).
+* **Chapters.** Each chapter remains its own XHTML document with unchanged
+  titles, order, spine, and navigation. A chapter's opening heading no longer
+  adds leading blank space (`h1:first-child` … `h6:first-child` →
+  `margin-top: 0`). Chapter splitting is untouched.
+* **Page breaks.** The M4.1/M3.6 semantics are preserved exactly: a
+  `PageBreak` stays an empty, `aria-hidden` `div.page-break` with
+  `page-break-after: always` plus the modern `break-after: always`
+  counterpart. No break is forced before every paragraph and no PDF pagination
+  is imitated; `break-inside: avoid` is used only on headings, images, and
+  list items.
+* **Images.** Document images stay responsive — `max-width: 100%`,
+  `height: auto` (aspect ratio preserved), `display: block`, centered when
+  smaller than the screen — with no fixed geometry in the markup, no cropping,
+  no upscaling, and no changes to the image bytes. The M4.4 cover reuses the
+  same rule, so a covered book needs no cover-specific, device-specific CSS.
+* **Semantic blockquotes and lists.** The stylesheet defines conservative
+  `blockquote`, `ul`/`ol`, and `li` defaults (em-based margins, readable
+  leading, no generated content, no manual numbering). The current document
+  model has no blockquote or list blocks, so none are invented during
+  conversion.
+* **Simple, Kindle-friendly CSS.** One stylesheet, ordered in readable
+  sections (base/body, headings, chapters, paragraphs, images, cover,
+  blockquotes, lists, page breaks), with no generated per-element classes, no
+  `@import`/`@media`, no `position: absolute|fixed`, no grid/flex/columns, no
+  JavaScript, no animations/transitions, no `url()`/remote fonts/external
+  resources, and no `vh`/`vw` device hacks. Internal links, metadata,
+  navigation, and cover semantics are unchanged.
+* **No new API, no new dependency.** The formatting profile is internal: there
+  is no user-selectable theme, and `convert_pdf_to_book`,
+  `convert_pdf_to_epub`, `build_epub`, `validate_epub`, and
+  `convert_epub_to_azw3` keep working unchanged. M4.5 adds no dependency to
+  `pyproject.toml`.
+* **Validated and deterministic.** M4.5 output keeps passing the M4.2
+  validator (`validate_epub`), stays convertible through M4.3, and produces
+  byte-identical stylesheets and chapter XHTML across builds of the same
+  `Book`.
+
+What M4.5 deliberately does **not** provide:
+
+* exact Kindle device rendering, screen simulation, or pixel matching;
+* fixed-layout EPUB, KFX, or Kindle Previewer automation;
+* device-specific CSS profiles, media queries, or per-model hacks;
+* an advanced typography engine (hyphenation, font embedding, optical margin
+  alignment), and any change to PDF reconstruction, OCR, or chapter splitting.
+
 ### Building the package
 
 ```bash
@@ -608,7 +681,11 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   optional external `ebook-convert` tool)
 * [x] Cover handling (M4.4 — explicit, optional cover: validated input,
   `cover-image`/`name="cover"` EPUB semantics, reflowable cover page)
-* [ ] Kindle-specific formatting improvements
+* [x] Kindle-specific formatting improvements (M4.5 — one internal formatting
+  profile, reflowable `em` typography, semantic heading/paragraph/chapter
+  formatting, conservative page-break behavior, responsive centered images,
+  conservative blockquote/list defaults, and a prohibited-construct-free
+  deterministic stylesheet)
 
 ### Milestone 5 — User Interface
 

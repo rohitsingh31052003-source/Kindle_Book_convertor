@@ -1,14 +1,15 @@
 """EPUB generation from the format-independent :class:`Book` model.
 
-Milestone 1.4, extended for the Kindle-ready rendering profile in M4.1. This
-module converts an existing
+Milestone 1.4, extended for the Kindle-ready rendering profile in M4.1 and
+refined by the Kindle-specific formatting milestone M4.5. This module converts
+an existing
 :class:`~kindle_converter.document.models.Book` -- the output of the PDF
 layer -- into a reflowable EPUB. It consumes the document model only and
 knows nothing about PDFs: no page inspection, OCR, scanned-page detection,
 paragraph reconstruction, reading order, or heading detection happens here.
 
-Rendering profile (M4.1)
-------------------------
+Rendering profile (M4.1, refined by M4.5)
+----------------------------------------
 The output is a **reflowable ebook**, never a PDF replica:
 
 * normal document flow only -- no fixed page dimensions, no absolute
@@ -21,6 +22,17 @@ The output is a **reflowable ebook**, never a PDF replica:
 * a small, deterministic stylesheet (:data:`STYLESHEET_CSS`) provides
   conservative defaults for body text, paragraphs, headings, images, and
   page breaks.
+
+M4.5 keeps that profile and refines it for Kindle-oriented *reading*: the CSS
+values are centralized in one formatting profile
+(:class:`kindle_converter.epub.formatting.KindleFormattingProfile`), typography
+stays relative (``em``) so the reader's font controls keep working, headings
+keep their hierarchy with conservative break-avoidance, the first heading of a
+chapter no longer adds leading blank space, images are centered and scale down
+to the reading width with their aspect ratio preserved, and semantic
+blockquote/list defaults exist for content that carries them. No structure,
+chapter splitting, heading decision, page-break semantic, or navigation entry
+changes: M4.5 only styles the semantic content M1-M3 already produced.
 
 The mapping is deterministic: a given ``Book`` always produces the same
 chapter order, block order, resource names, TOC, and CSS. The only
@@ -59,6 +71,7 @@ from ..document import (
     PageBreak,
     Paragraph,
 )
+from .formatting import DEFAULT_FORMATTING, build_stylesheet
 
 PathLike = str | os.PathLike[str]
 
@@ -479,63 +492,17 @@ def _resolve_content_type(block: Image) -> str:
 # CSS
 # --------------------------------------------------------------------------- #
 
-#: Conservative, Kindle-oriented stylesheet for a reflowable book (M4.1).
-#: Deliberately plain and self-contained: relative units only, normal
-#: document flow, no fixed page dimensions, no absolute positioning, no
-#: viewport units, no JavaScript, no animations, no external resources, and
-#: no attempt to reproduce PDF typography. Page margins are left to the
-#: reading system; the spacing rules here only control block flow, so the
-#: text reflows naturally on any screen size. Advanced Kindle typography is
-#: explicitly out of scope until M4.5.
-STYLESHEET_CSS = """\
-/* Kindle-oriented stylesheet for a reflowable book (M4.1). */
-html {
-    font-size: 1em;
-}
-body {
-    font-family: serif, Georgia, "Times New Roman", serif;
-    font-size: 1em;
-    line-height: 1.5;
-    margin: 0;
-    padding: 0;
-    color: #000;
-    text-align: left;
-}
-p {
-    margin: 0 0 1em 0;
-    padding: 0;
-    text-indent: 0;
-    line-height: 1.5;
-}
-h1, h2, h3, h4, h5, h6 {
-    font-family: inherit;
-    font-weight: bold;
-    font-style: normal;
-    line-height: 1.3;
-    margin: 1.2em 0 0.5em 0;
-    padding: 0;
-    text-align: left;
-    page-break-after: avoid;
-    break-after: avoid;
-}
-h1 { font-size: 1.6em; }
-h2 { font-size: 1.4em; }
-h3 { font-size: 1.25em; }
-h4, h5, h6 { font-size: 1.1em; }
-img.image {
-    display: block;
-    max-width: 100%;
-    height: auto;
-    margin: 0.5em 0;
-}
-div.page-break {
-    height: 0;
-    margin: 0;
-    padding: 0;
-    page-break-after: always;
-    break-after: always;
-}
-"""
+#: Conservative, Kindle-oriented stylesheet for a reflowable book (M4.1,
+#: refined by M4.5). The values live in the centralized formatting profile of
+#: :mod:`kindle_converter.epub.formatting`; this constant is the deterministic
+#: stylesheet one :data:`DEFAULT_FORMATTING` produces. It stays deliberately
+#: plain and self-contained: relative units only, normal document flow, no
+#: fixed page dimensions, no absolute positioning, no viewport units, no
+#: JavaScript, no animations, no external resources, and no attempt to
+#: reproduce PDF typography. Page margins are left to the reading system; the
+#: styling rules only control block flow, so the text reflows naturally on any
+#: screen size, and the reader's own font/size controls remain effective.
+STYLESHEET_CSS = build_stylesheet(DEFAULT_FORMATTING)
 
 
 # --------------------------------------------------------------------------- #

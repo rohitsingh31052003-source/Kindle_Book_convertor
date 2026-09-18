@@ -48,9 +48,16 @@ auto-detected; without one the output is exactly as before:
 
     >>> convert_pdf_to_epub("book.pdf", "book.epub", cover="cover.jpg")
 
-Formal EPUB validation (M4.2), EPUB -> AZW3 conversion (M4.3), and cover
-handling (M4.4) are implemented; Kindle-specific formatting improvements
-(M4.5) are not implemented yet.
+M4.5 refines the *output* of that boundary for Kindle reading: the generated
+stylesheet is built from one centralized Kindle formatting profile
+(:mod:`kindle_converter.epub.formatting`), with reflowable ``em`` typography,
+a conservative heading hierarchy, improved paragraph/chapter spacing,
+centered width-constrained images, and conservative break-avoidance. It adds
+no public configuration API and changes no structure, navigation, metadata,
+or page-break semantics.
+
+Formal EPUB validation (M4.2), EPUB -> AZW3 conversion (M4.3), cover handling
+(M4.4), and Kindle-specific formatting improvements (M4.5) are implemented.
 """
 
 from .pipeline import convert_pdf_to_book, convert_pdf_to_epub

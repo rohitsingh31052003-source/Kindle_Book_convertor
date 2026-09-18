@@ -32,6 +32,18 @@ cover image (``properties="cover-image"`` + ``name="cover"`` metadata) and a
 minimal reflowable cover page ahead of the content in the spine. The cover is
 never inferred from anything, never added to the navigation, and books
 without a cover are unchanged.
+
+M4.5 refines the rendering profile of :func:`build_epub` for Kindle reading
+without touching structure: the stylesheet the builder packages is generated
+from the centralized, internal profile in
+:mod:`kindle_converter.epub.formatting`
+(:class:`~kindle_converter.epub.formatting.KindleFormattingProfile`) by
+:func:`~kindle_converter.epub.formatting.build_stylesheet`. The markup stays
+semantic and unchanged (``<h1>``-``<h6>``, ``<p>``, ``<img class="image">``,
+an empty ``div.page-break``), the cover page keeps reusing ``img.image``, and
+the CSS remains one deterministic, reflowable, Kindle-friendly stylesheet --
+never a device profile, fixed layout, or PDF replica. The M4.5 formatting
+module is internal: no public configuration API was added.
 """
 
 from .azw3 import (
