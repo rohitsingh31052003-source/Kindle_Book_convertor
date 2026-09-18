@@ -295,6 +295,52 @@ installed** — the core suite never requires it. The optional Calibre
 (`tests/test_epub_azw3_calibre.py`) and Tesseract (`tests/test_pdf_ocr_tesseract.py`)
 integration tests likewise skip when those external tools are unavailable.
 
+### Regression test harness (M6.2)
+
+`tests/regression` is a deterministic, corpus-driven regression suite over the
+M6.1 fixture corpus (`tests/fixtures/corpus`). It runs every representative
+fixture through the **real** public pipeline
+(`convert_pdf_to_book` / `convert_pdf_to_epub`, plus the M5
+`ConversionApplication`) and asserts observable, semantic properties — never
+byte-for-byte EPUB snapshots, ZIP ordering, or HTML formatting:
+
+* classification and conversion routing (native vs OCR vs mixed) via an
+  injected, deterministic OCR engine (`tests.regression.harness.CountingOCR`);
+* paragraph reconstruction, reading order, heading hierarchy, and chapter
+  detection;
+* repeated header/footer furniture staying out of the body;
+* image extraction and placement in the resulting EPUB;
+* EPUB generation, `validate_epub` results, chapter/image/heading structure.
+
+Run it on its own or as part of the full suite:
+
+```bash
+pytest -m regression   # only the corpus regression suite
+pytest                 # full suite, regression included
+```
+
+Expectations live in two places, each with a distinct role:
+
+* **`tests/fixtures/corpus/manifest.json`** — corpus metadata only:
+  classification, page counts, and per-fixture features (single source of
+  truth, shared with M6.3/M6.4).
+* **`tests/fixtures/regression_baseline.json`** — regression-specific,
+  structural expectations (block/heading/paragraph counts, chapter counts,
+  image and EPUB artifact structure). It is kept small, human-readable, and
+  regenerable with:
+
+  ```bash
+  python -m tests.regression.regenerate_baseline --write
+  ```
+
+  (the script diffs against the committed baseline first; run without
+  `--write` to preview). Review any baseline diff like a behavior change.
+
+The suite is fully deterministic and needs **no** Tesseract, Calibre, network,
+or GUI: scanned/mixed fixtures exercise the real OCR routing with the injected
+engine, and the pre-existing optional Tesseract/Calibre integration tests
+continue to skip when those tools are absent.
+
 ### Desktop UI (M5.2–M5.9, the complete desktop workflow)
 
 The desktop application is a PySide6 UI (`kindle_converter.ui`). PySide6 is an
@@ -1094,7 +1140,12 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   corpus under `tests/fixtures/corpus` — see that directory's `README.md` —
   with a byte-reproducible generator, a machine-readable `manifest.json`,
   and infrastructure coverage in `tests/test_corpus.py`)
-* [ ] Add regression tests
+* [x] Add regression tests (M6.2; deterministic corpus-driven regression
+  harness under `tests/regression` — 253 tests marked `regression` — running
+  the M6.1 corpus through the real conversion pipeline and asserting
+  observable behavior against the version-controlled baseline
+  `tests/fixtures/regression_baseline.json`; see "Regression test harness"
+  below)
 * [ ] Measure conversion quality
 * [ ] Improve performance
 * [ ] Package for Windows

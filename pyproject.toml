@@ -60,3 +60,8 @@ testpaths = ["tests"]
 addopts = "-q"
 # Make src-layout package importable when running pytest without installing.
 pythonpath = ["src"]
+markers = [
+    # M6.2 corpus-driven regression suite. Runs as part of the normal suite;
+    # `pytest -m regression` selects only it.
+    "regression: corpus-driven regression tests over the M6.1 fixture corpus",
+]

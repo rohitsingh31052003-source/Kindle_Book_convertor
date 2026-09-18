@@ -3,7 +3,9 @@
 Verifies the committed corpus at ``tests/fixtures/corpus``: the manifest is
 valid and complete, the discovery API works, the fixture PDFs match their
 manifest expectations when analyzed, key structural signals survive
-reconstruction, and regeneration is byte-for-byte deterministic.
+reconstruction, and regeneration is byte-for-byte deterministic apart from
+PyMuPDF's self-identification version stamps (which are masked before
+comparison, since they vary with the installed PyMuPDF edition).
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 import importlib
 import json
 import pathlib
+import re
 
 import pymupdf
 import pytest
@@ -179,6 +182,42 @@ def test_image_fixtures_report_minimum_placements() -> None:
         assert result.placement_count >= minimum, document_id
 
 
+_WRITER_STAMP_PATTERN = re.compile(rb"MuPDF \d+[^\s)]*")
+
+
+def _mask_pdf_writer_stamps(data: bytes) -> bytes:
+    """Mask PyMuPDF's self-identification stamps for determinism comparison.
+
+    On every save PyMuPDF embeds its own version in two places that fixtures
+    cannot control (verified on PyMuPDF 1.27.x/1.28.x): the
+    ``% Written by MuPDF <version>`` header comment and the inline catalog
+    ``/Producer (MuPDF <version>)`` value. ``set_metadata(producer=...)``
+    only affects the document Info dictionary, not these writer stamps.
+
+    The stamps are writer metadata, not fixture content, so they are masked
+    before comparing regenerated output with the committed corpus. The mask
+    is length-preserving (digits are replaced in place), so byte offsets and
+    the xref table remain part of the comparison. Every other byte — object
+    graph, streams, fonts, images, pinned metadata, xref offsets — must still
+    match exactly.
+
+    The expected stamp count is asserted so that genuine content drift (or a
+    future PyMuPDF stamp format change) still fails loudly instead of being
+    silently masked.
+    """
+    masked, count = _WRITER_STAMP_PATTERN.subn(
+        lambda match: b"MuPDF " + b"N" * (match.end() - match.start() - len(b"MuPDF ")),
+        data,
+    )
+    if count != 2:
+        raise AssertionError(
+            f"expected exactly two MuPDF version stamps (header comment + "
+            f"catalog producer) in the generated PDF, found {count}; "
+            "update _mask_pdf_writer_stamps if PyMuPDF changed its stamp format"
+        )
+    return masked
+
+
 def test_regeneration_is_byte_identical(tmp_path: pathlib.Path) -> None:
     generator = importlib.import_module("tests.fixtures.corpus.generate_corpus")
     out_dir = tmp_path / "pdfs"
@@ -187,6 +226,6 @@ def test_regeneration_is_byte_identical(tmp_path: pathlib.Path) -> None:
     for fixture_id in fixtures:
         path = out_dir / f"{fixture_id}.pdf"
         fixtures[fixture_id].generate(path)
-        assert path.read_bytes() == (PDFS_DIR / f"{fixture_id}.pdf").read_bytes(), (
-            f"{fixture_id} is not deterministic; regenerate and recommit"
-        )
+        assert _mask_pdf_writer_stamps(path.read_bytes()) == _mask_pdf_writer_stamps(
+            (PDFS_DIR / f"{fixture_id}.pdf").read_bytes()
+        ), f"{fixture_id} is not deterministic; regenerate and recommit"

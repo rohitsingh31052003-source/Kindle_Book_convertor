@@ -39,7 +39,14 @@ The corpus test suite (`tests/test_corpus.py`) covers:
 - manifest validity, unique IDs, mandatory metadata, and paths
 - presence of the generated PDFs
 - **byte determinism** – regenerating a fixture into a temporary directory
-  must reproduce the committed bytes exactly
+  must reproduce the committed bytes exactly, apart from PyMuPDF's
+  self-identification stamps (the `% Written by MuPDF <version>` header
+  comment and the catalog `Producer (MuPDF <version>)` value). Those two
+  stamps are masked (length-preserving, in-place) before comparison, so the
+  contract holds on any supported PyMuPDF edition; all content bytes —
+  object graph, streams, fonts, images, pinned metadata, xref offsets —
+  are still compared exactly, and genuine drift still fails with a
+  regenerate-and-recommit message
 - the discovery API (`load_manifest`, `iter_documents`, `document_path`)
 - `analyze_pdf` classification matches the manifest expectation
 - page / text-page / image-page counts match each fixture's expectations

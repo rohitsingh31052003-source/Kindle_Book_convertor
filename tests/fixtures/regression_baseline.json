@@ -1,0 +1,420 @@
+{
+  "schema_version": 1,
+  "description": "Deterministic regression expectations (M6.2) for the M6.1 corpus. Regenerated with python -m tests.regression.regenerate_baseline; contains/excludes are human-authored and preserved on regeneration. The analysis block records the M3.1 classification and page-count breakdown observed by the converter; the corpus manifest remains the declared source of truth for the same facts (tests/fixtures/corpus/manifest.json).",
+  "documents": {
+    "novel_basic": {
+      "analysis": {
+        "document_type": "TEXT",
+        "page_count": 6,
+        "text_page_count": 6,
+        "image_page_count": 0
+      },
+      "blocks": {
+        "paragraphs": 14,
+        "headings": 3,
+        "images": 0,
+        "page_breaks": 5
+      },
+      "ocr_calls": 0,
+      "heading_texts": [
+        "Chapter 1: The Harbor Lights",
+        "Chapter 2: The Keeper's Daughter",
+        "Chapter 3: North Wind"
+      ],
+      "chapter_count": 3,
+      "epub": {
+        "chapter_files": 1,
+        "image_resources": 0,
+        "page_breaks": 5,
+        "heading_tags": 3,
+        "nav_entries": 1,
+        "valid": true,
+        "errors": 0
+      },
+      "contains": [
+        "The Lantern Keeper",
+        "Chapter 1: The Harbor Lights",
+        "Chapter 2: The Keeper's Daughter",
+        "by Ada Grant"
+      ],
+      "excludes": [
+        "OCR-TEXT-FOR-CALL"
+      ]
+    },
+    "textbook_dense": {
+      "analysis": {
+        "document_type": "TEXT",
+        "page_count": 6,
+        "text_page_count": 6,
+        "image_page_count": 0
+      },
+      "blocks": {
+        "paragraphs": 31,
+        "headings": 13,
+        "images": 0,
+        "page_breaks": 5
+      },
+      "ocr_calls": 0,
+      "heading_texts": [
+        "Introduction to Coastal Hydrography",
+        "1. Introduction",
+        "1.1 Background",
+        "2. Methods",
+        "2.1 Instrumentation",
+        "3. Results",
+        "3.1 The inner channel",
+        "4. Discussion",
+        "4.1 Comparison with older surveys",
+        "5. Field practice",
+        "5.1 Equipment list",
+        "6. Conclusion",
+        "6.1 Limitations"
+      ],
+      "chapter_count": 0,
+      "epub": {
+        "chapter_files": 1,
+        "image_resources": 0,
+        "page_breaks": 5,
+        "heading_tags": 13,
+        "nav_entries": 1,
+        "valid": true,
+        "errors": 0
+      },
+      "contains": [
+        "Introduction to Coastal Hydrography",
+        "The value of this work lies in its being repeatable"
+      ],
+      "excludes": [
+        "OCR-TEXT-FOR-CALL"
+      ]
+    },
+    "twocolumn_article": {
+      "analysis": {
+        "document_type": "TEXT",
+        "page_count": 3,
+        "text_page_count": 3,
+        "image_page_count": 0
+      },
+      "blocks": {
+        "paragraphs": 27,
+        "headings": 3,
+        "images": 0,
+        "page_breaks": 2
+      },
+      "ocr_calls": 0,
+      "heading_texts": [
+        "The Harbor Gazette",
+        "The Harbor Gazette",
+        "The Harbor Gazette"
+      ],
+      "chapter_count": 3,
+      "epub": {
+        "chapter_files": 1,
+        "image_resources": 0,
+        "page_breaks": 2,
+        "heading_tags": 3,
+        "nav_entries": 1,
+        "valid": true,
+        "errors": 0
+      },
+      "contains": [
+        "The Harbor Gazette",
+        "The Gazette welcomes letters on harbor matters before noon on Fridays"
+      ],
+      "excludes": [
+        "OCR-TEXT-FOR-CALL"
+      ],
+      "column_tokens": [
+        "L1",
+        "R1",
+        "L2",
+        "R2",
+        "L3",
+        "R3",
+        "L4",
+        "R4"
+      ]
+    },
+    "scanned_book": {
+      "analysis": {
+        "document_type": "SCANNED",
+        "page_count": 5,
+        "text_page_count": 0,
+        "image_page_count": 5
+      },
+      "blocks": {
+        "paragraphs": 5,
+        "headings": 0,
+        "images": 5,
+        "page_breaks": 4
+      },
+      "ocr_calls": 5,
+      "heading_texts": [],
+      "chapter_count": 0,
+      "epub": {
+        "chapter_files": 1,
+        "image_resources": 5,
+        "page_breaks": 4,
+        "heading_tags": 0,
+        "nav_entries": 1,
+        "valid": true,
+        "errors": 0
+      },
+      "contains": [
+        "OCR-TEXT-FOR-CALL-1",
+        "OCR-TEXT-FOR-CALL-5"
+      ],
+      "excludes": [
+        "Tesseract",
+        "pytesseract"
+      ]
+    },
+    "text_with_images": {
+      "analysis": {
+        "document_type": "TEXT",
+        "page_count": 4,
+        "text_page_count": 4,
+        "image_page_count": 4
+      },
+      "blocks": {
+        "paragraphs": 12,
+        "headings": 0,
+        "images": 4,
+        "page_breaks": 3
+      },
+      "ocr_calls": 0,
+      "heading_texts": [],
+      "chapter_count": 0,
+      "epub": {
+        "chapter_files": 1,
+        "image_resources": 3,
+        "page_breaks": 3,
+        "heading_tags": 0,
+        "nav_entries": 1,
+        "valid": true,
+        "errors": 0
+      },
+      "contains": [
+        "Figure 1: The survey boat at anchor off the outer bar",
+        "Figure 3: The tide curve recorded over a single spring day"
+      ],
+      "excludes": [
+        "OCR-TEXT-FOR-CALL"
+      ]
+    },
+    "headers_footers": {
+      "analysis": {
+        "document_type": "TEXT",
+        "page_count": 6,
+        "text_page_count": 6,
+        "image_page_count": 0
+      },
+      "blocks": {
+        "paragraphs": 18,
+        "headings": 0,
+        "images": 0,
+        "page_breaks": 5
+      },
+      "ocr_calls": 0,
+      "heading_texts": [],
+      "chapter_count": 0,
+      "epub": {
+        "chapter_files": 1,
+        "image_resources": 0,
+        "page_breaks": 5,
+        "heading_tags": 0,
+        "nav_entries": 1,
+        "valid": true,
+        "errors": 0
+      },
+      "contains": [
+        "The salt wind off the harbor carried the smell of rope and paint"
+      ],
+      "excludes": [
+        "The Lantern Keeper",
+        "Chapter One",
+        "OCR-TEXT-FOR-CALL"
+      ]
+    },
+    "unusual_typography": {
+      "analysis": {
+        "document_type": "TEXT",
+        "page_count": 4,
+        "text_page_count": 4,
+        "image_page_count": 0
+      },
+      "blocks": {
+        "paragraphs": 13,
+        "headings": 0,
+        "images": 0,
+        "page_breaks": 3
+      },
+      "ocr_calls": 0,
+      "heading_texts": [],
+      "chapter_count": 0,
+      "epub": {
+        "chapter_files": 1,
+        "image_resources": 0,
+        "page_breaks": 3,
+        "heading_tags": 0,
+        "nav_entries": 1,
+        "valid": true,
+        "errors": 0
+      },
+      "contains": [
+        "On the Behavior of Light",
+        "SET IN SMALL CAPS",
+        "\"Detail is the friend of the patient observer"
+      ],
+      "excludes": [
+        "OCR-TEXT-FOR-CALL"
+      ]
+    },
+    "mixed_text_image": {
+      "analysis": {
+        "document_type": "MIXED",
+        "page_count": 8,
+        "text_page_count": 5,
+        "image_page_count": 4
+      },
+      "blocks": {
+        "paragraphs": 16,
+        "headings": 0,
+        "images": 4,
+        "page_breaks": 7
+      },
+      "ocr_calls": 3,
+      "heading_texts": [],
+      "chapter_count": 0,
+      "epub": {
+        "chapter_files": 1,
+        "image_resources": 2,
+        "page_breaks": 7,
+        "heading_tags": 0,
+        "nav_entries": 1,
+        "valid": true,
+        "errors": 0
+      },
+      "contains": [
+        "Harbor Bulletin, First Quarter",
+        "OCR-TEXT-FOR-CALL-1",
+        "OCR-TEXT-FOR-CALL-3"
+      ],
+      "excludes": [
+        "Tesseract",
+        "pytesseract"
+      ]
+    },
+    "chapters_long": {
+      "analysis": {
+        "document_type": "TEXT",
+        "page_count": 8,
+        "text_page_count": 8,
+        "image_page_count": 0
+      },
+      "blocks": {
+        "paragraphs": 24,
+        "headings": 8,
+        "images": 0,
+        "page_breaks": 7
+      },
+      "ocr_calls": 0,
+      "heading_texts": [
+        "Chapter 1: The Harbor",
+        "Chapter 2: The Quay",
+        "Chapter 3: The Tides",
+        "Chapter 4: The Fleet",
+        "Chapter 5: The Beacon",
+        "Chapter 6: The Storm",
+        "Chapter 7: The Return",
+        "Chapter 8: The Light"
+      ],
+      "chapter_count": 8,
+      "epub": {
+        "chapter_files": 1,
+        "image_resources": 0,
+        "page_breaks": 7,
+        "heading_tags": 8,
+        "nav_entries": 1,
+        "valid": true,
+        "errors": 0
+      },
+      "contains": [
+        "Chapter 1: The Harbor",
+        "Chapter 8: The Light"
+      ],
+      "excludes": [
+        "OCR-TEXT-FOR-CALL"
+      ]
+    },
+    "edge_interleaved_blank": {
+      "analysis": {
+        "document_type": "MIXED",
+        "page_count": 4,
+        "text_page_count": 2,
+        "image_page_count": 0
+      },
+      "blocks": {
+        "paragraphs": 4,
+        "headings": 0,
+        "images": 0,
+        "page_breaks": 3
+      },
+      "ocr_calls": 2,
+      "heading_texts": [],
+      "chapter_count": 0,
+      "epub": {
+        "chapter_files": 1,
+        "image_resources": 0,
+        "page_breaks": 3,
+        "heading_tags": 0,
+        "nav_entries": 1,
+        "valid": true,
+        "errors": 0
+      },
+      "contains": [
+        "This page intentionally carries nothing",
+        "OCR-TEXT-FOR-CALL-1",
+        "OCR-TEXT-FOR-CALL-2"
+      ],
+      "excludes": [
+        "Tesseract",
+        "pytesseract"
+      ]
+    },
+    "edge_short_report": {
+      "analysis": {
+        "document_type": "TEXT",
+        "page_count": 2,
+        "text_page_count": 2,
+        "image_page_count": 0
+      },
+      "blocks": {
+        "paragraphs": 5,
+        "headings": 0,
+        "images": 0,
+        "page_breaks": 1
+      },
+      "ocr_calls": 0,
+      "heading_texts": [],
+      "chapter_count": 0,
+      "epub": {
+        "chapter_files": 1,
+        "image_resources": 0,
+        "page_breaks": 1,
+        "heading_tags": 0,
+        "nav_entries": 1,
+        "valid": true,
+        "errors": 0
+      },
+      "contains": [
+        "Minimum Viable Document",
+        "Closing note",
+        "This short report exists to give the corpus"
+      ],
+      "excludes": [
+        "OCR-TEXT-FOR-CALL"
+      ]
+    }
+  }
+}
