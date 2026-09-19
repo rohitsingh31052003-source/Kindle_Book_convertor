@@ -629,6 +629,72 @@ class TestFirstPageIsRealContent:
 
 
 # --------------------------------------------------------------------------- #
+# M7.1 follow-up: per-page content never bleeds across page boundaries
+# --------------------------------------------------------------------------- #
+
+
+def make_marked_pdf(path: Path, markers: tuple[str, ...]) -> Path:
+    """A text PDF with one unmistakable unique marker on each page."""
+    doc = pymupdf.open()
+    for index, marker in enumerate(markers):
+        page = doc.new_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
+        page.insert_textbox(
+            pymupdf.Rect(72, 150, 500, 400),
+            f"The body paragraph of page {index + 1} continues.\n\n{marker}",
+            fontname="helv",
+            fontsize=12,
+        )
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+class TestNoCrossPageDuplication:
+    """The reported "print of the previous page reappearing" symptom must
+    never be reproducible from the current pipeline.
+
+    Each page's unique marker must occur exactly once in the serialized
+    XHTML, in the page-break segment belonging to its own source page, and
+    its Book paragraphs must not carry another page's marker.
+    """
+
+    def test_unique_markers_stay_with_their_source_pages(self, tmp_path) -> None:
+        markers = (
+            "PAGE_ONE_UNIQUE_TEXT",
+            "PAGE_TWO_UNIQUE_TEXT",
+            "PAGE_THREE_UNIQUE_TEXT",
+            "PAGE_FOUR_UNIQUE_TEXT",
+        )
+        pdf = make_marked_pdf(tmp_path / "marked.pdf", markers)
+        out = tmp_path / "marked.epub"
+
+        book = convert_pdf_to_book(pdf, FakeOCREngine(["unused"]))
+        paragraphs = [
+            b.text for b in book.chapters[0].blocks if isinstance(b, Paragraph)
+        ]
+        for marker in markers:
+            # Book layer: the marker appears in exactly one paragraph, and
+            # that paragraph carries no other page's marker.
+            own = [p for p in paragraphs if marker in p]
+            assert len(own) == 1
+            assert all(other not in own[0] for other in markers if other != marker)
+
+        convert_pdf_to_epub(pdf, out, engine=FakeOCREngine(["unused"]))
+        with read_archive(out) as archive:
+            xhtml = archive.read("EPUB/chapter-00.xhtml").decode("utf-8")
+        segments = xhtml.split('<div class="page-break"')
+        assert len(segments) == len(markers)
+        for page_index, marker in enumerate(markers):
+            # XHTML layer: each marker appears exactly once in the whole
+            # document, and only inside its own page-break segment.
+            assert xhtml.count(marker) == 1
+            assert marker in segments[page_index]
+            for other_index, other in enumerate(markers):
+                if other_index != page_index:
+                    assert other not in segments[page_index]
+
+
+# --------------------------------------------------------------------------- #
 # F: Images
 # --------------------------------------------------------------------------- #
 
