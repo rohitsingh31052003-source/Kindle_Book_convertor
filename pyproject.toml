@@ -64,4 +64,7 @@ markers = [
     # M6.2 corpus-driven regression suite. Runs as part of the normal suite;
     # `pytest -m regression` selects only it.
     "regression: corpus-driven regression tests over the M6.1 fixture corpus",
+    # M6.3 conversion-quality measurement suite. Runs as part of the normal
+    # suite; `pytest -m quality` selects only it.
+    "quality: corpus-driven conversion-quality measurement tests (M6.3)",
 ]

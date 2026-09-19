@@ -6,7 +6,7 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 5 — User Interface (complete; M5.9 — Documentation + M5 Closure — complete)
+**Development stage:** Milestone 6 — Quality and Distribution (progressing; M6.1 representative corpus, M6.2 regression harness, and M6.3 conversion-quality measurement are complete)
 
 The repository is at the end of **Milestone 5**. Every M5 sub-milestone, M5.1
 through M5.9, is implemented and complete:
@@ -53,7 +53,10 @@ deterministic test suite.
 
 The core library never imports PySide6, and the UI talks to the core only
 through the M5.1 application API. **Milestone 6** (quality and distribution)
-has **not** started.
+is underway: the M6.1 representative test corpus, the M6.2 deterministic
+regression harness, and the M6.3 conversion-quality measurement suite are
+complete (see the sections below); performance measurement, Windows packaging,
+and release preparation remain.
 
 ## Goals
 
@@ -341,6 +344,89 @@ or GUI: scanned/mixed fixtures exercise the real OCR routing with the injected
 engine, and the pre-existing optional Tesseract/Calibre integration tests
 continue to skip when those tools are absent.
 
+### Conversion quality measurement (M6.3)
+
+`tests/quality` measures *conversion quality* over the same M6.1 corpus and is
+deliberately separate from the M6.2 regression suite:
+
+* the **regression baseline** (M6.2) pins exact, deterministic structural
+  behavior (block counts, chapter counts, OCR call counts) so unintended
+  converter changes fail loudly;
+* the **quality baseline** (M6.3) declares authored, human-written *quality*
+  expectations -- numeric floors and ceilings, content anchors, exclusion
+  rules, booleans, and ordered reading-order sequences -- and reports how the
+  current converter measures against them without a single hiding "quality
+  score".
+
+Both share the deterministic, offline discipline: no Tesseract, no Calibre, no
+network, no clocks, no absolute paths in observations or reports.
+Classification is the single exception to "authored": it is read from the
+corpus manifest at evaluation time, not duplicated in the quality baseline.
+
+**Dimensions.** Each fixture is measured across the applicable dimensions:
+
+* `classification` -- manifest-driven PDF type check (never stored in the
+  baseline);
+* `structure` -- paragraphs, detected headings, PDF-layer chapters and TOC
+  entries (`detect_chapters` / `generate_toc`), page breaks, empty /
+  near-empty paragraph artifacts, body-text content anchors;
+* `reading_order` -- the left/right `L1..R4` column-token sequence of the
+  two-column fixture, asserted as an ordered sequence;
+* `ocr` -- how many pages were routed to OCR (via the injected
+  `CountingOCR`), whether OCR marker text entered the body, and that no
+  real OCR-engine strings leak through;
+* `images` -- image blocks in the `Book` and deduplicated image resources in
+  the EPUB;
+* `epub` -- `validate_epub` validity, chapter files, heading tags, nav
+  entries, empty chapters, and EPUB body-content anchors.
+
+Expectation types: `exact`, `minimum`, `maximum`, `contains`, `excludes`,
+`boolean`, `ordered_sequence`.
+
+**Run it** (marked `quality`, run as part of the full suite or alone):
+
+```bash
+pytest -m quality   # only the conversion-quality measurement suite
+pytest              # full suite, both suites included
+```
+
+**Baseline and regeneration.** Authored expectations live in
+`tests/fixtures/quality_baseline.json` (schema version 1). `exact` pins follow
+the current measurement when the baseline is regenerated; every other
+expectation type is preserved verbatim and is never fabricated from a
+measurement. Regeneration is explicit and protects against silent weakening:
+
+```bash
+PYTHONPATH=src python -m tests.quality.regenerate_baseline        # preview only
+PYTHONPATH=src python -m tests.quality.regenerate_baseline --write # persist after review
+```
+
+The tool diffs against the committed baseline first, reports every *authored*
+expectation that now fails the fresh measurement as a **finding** (not a
+baseline edit -- it refuses to `--write` over failing authored
+expectations), and updates only the `exact` pins. Review any diff like a
+behavior change, exactly as with M6.2.
+
+**Reports.** `tests/quality/report.py` renders the measured quality two ways:
+a JSON machine report and a human-readable report. Both expose per-fixture,
+per-metric `expected` / `observed` / `status` / `details` so individual
+measurements are never hidden behind one aggregate number, and no timestamps
+or machine paths leak in.
+
+**Known converter gaps surfaced by M6.3.** The measurement underlines two
+honest limitations (recorded as per-fixture `notes`, not hidden):
+
+* **EPUB chapter splitting is absent.** Even when the PDF layer detects and
+  indexes chapters (`novel_basic` 3, `chapters_long` 8, `twocolumn_article`
+  3 TOC entries), the EPUB always ships a single chapter file with one nav
+  entry. The quality baseline records `nav_entries >= 1` and flags the
+  divergence in the `chapters_long` review note as follow-up work.
+* **Document titles are not detected as headings.** The M2.4 heading detector
+  is deliberately conservative: titles such as "Minimum Viable Document" and
+  "On the Behavior of Light" are treated as body text while explicit
+  `Chapter N:` headings are surfaced. Expectations document this behavior
+  rather than weakening the detection thresholds.
+
 ### Desktop UI (M5.2–M5.9, the complete desktop workflow)
 
 The desktop application is a PySide6 UI (`kindle_converter.ui`). PySide6 is an
@@ -582,8 +668,8 @@ M5.9 is the **documentation and M5 closure** milestone. This README describes
 the implemented M5 state — project status, roadmap, desktop workflow, PDF
 classifications, conversion options, results/validation, background
 conversion, temporary workspace and error handling, installation, testing, and
-license — and records the M5 acceptance checklist below. No Milestone 6 work
-has started.
+license — and records the M5 acceptance checklist below. It was written before
+Milestone 6 began; the Milestone 6 sections further below document M6.1–M6.3.
 
 ### M5 acceptance checklist
 
@@ -617,9 +703,11 @@ Milestone 5 is complete; it delivers:
 
 Remaining/future capabilities (not implemented in M5): **drag-and-drop**
 input (input is selected through the file picker), conversion **cancellation**
-(a running conversion finishes rather than being stopped), and all Milestone 6
-work (representative test corpus, regression and quality measurement,
-performance, Windows packaging, and release preparation).
+(a running conversion finishes rather than being stopped), and remaining
+Milestone 6 work (performance measurement, Windows packaging, and release
+preparation). The M6.1 representative corpus and the M6.2 regression + M6.3
+conversion-quality measurement suites are implemented and part of the standard
+test run.
 
 ### OCR (scanned PDFs)
 
@@ -1146,7 +1234,13 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   observable behavior against the version-controlled baseline
   `tests/fixtures/regression_baseline.json`; see "Regression test harness"
   below)
-* [ ] Measure conversion quality
+* [x] Measure conversion quality (M6.3; deterministic corpus-driven quality
+  measurement under `tests/quality` — 148 tests marked `quality` — authoring
+  per-fixture quality expectations (structure, reading order, OCR routing,
+  images, EPUB) in `tests/fixtures/quality_baseline.json`, evaluating them
+  against fresh measurements, and rendering human/machine reports; regeneration
+  is explicit via `python -m tests.quality.regenerate_baseline`; see
+  "Conversion quality measurement (M6.3)" below)
 * [ ] Improve performance
 * [ ] Package for Windows
 * [ ] Documentation

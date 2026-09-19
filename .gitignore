@@ -65,3 +65,8 @@ Thumbs.db
 *.mobi
 output/
 generated/
+
+# Agent implementation reports (not part of the repository source)
+report_final_sample.md
+report_m6.md
+report_m6_3.md

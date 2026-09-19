@@ -1,0 +1,893 @@
+{
+  "schema_version": 1,
+  "description": "M6.3 conversion-quality expectations over the M6.1 corpus. Each expectation is an authored claim about what good output looks like (structure, reading order, OCR routing, image handling, EPUB presentation). Classification is deliberately absent: it is derived from the corpus manifest at evaluation time. Refreshed only via `python -m tests.quality.regenerate_baseline --write` after human review of the diff.",
+  "dimension_order": [
+    "classification",
+    "structure",
+    "reading_order",
+    "ocr",
+    "images",
+    "epub"
+  ],
+  "documents": {
+    "novel_basic": {
+      "notes": [
+        "Chapters are detected only at the PDF layer; the EPUB keeps a single chapter file (nav_entries=1). A visual check on a Kindle is recommended."
+      ],
+      "structure": {
+        "paragraphs": {
+          "type": "minimum",
+          "expected": 12
+        },
+        "headings": {
+          "type": "minimum",
+          "expected": 3
+        },
+        "chapters": {
+          "type": "minimum",
+          "expected": 3
+        },
+        "toc_entries": {
+          "type": "minimum",
+          "expected": 3
+        },
+        "page_breaks": {
+          "type": "exact",
+          "expected": 5
+        },
+        "empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "near_empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "The Lantern Keeper",
+            "by Ada Grant"
+          ]
+        },
+        "excludes": {
+          "type": "excludes",
+          "expected": [
+            "OCR-TEXT-FOR-CALL"
+          ]
+        }
+      },
+      "ocr": {
+        "ocr_calls": {
+          "type": "exact",
+          "expected": 0
+        },
+        "ocr_text_present": {
+          "type": "boolean",
+          "expected": false
+        }
+      },
+      "epub": {
+        "valid": {
+          "type": "boolean",
+          "expected": true
+        },
+        "chapter_files": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "heading_tags": {
+          "type": "minimum",
+          "expected": 3
+        },
+        "nav_entries": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "empty_chapters": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "Chapter 1: The Harbor Lights"
+          ]
+        }
+      }
+    },
+    "textbook_dense": {
+      "notes": [],
+      "structure": {
+        "paragraphs": {
+          "type": "minimum",
+          "expected": 28
+        },
+        "headings": {
+          "type": "minimum",
+          "expected": 13
+        },
+        "page_breaks": {
+          "type": "exact",
+          "expected": 5
+        },
+        "empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "near_empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "The Harbor Survey Office",
+            "Coastal hydrography records the shape and movement of the sea within sight of land"
+          ]
+        },
+        "excludes": {
+          "type": "excludes",
+          "expected": [
+            "OCR-TEXT-FOR-CALL"
+          ]
+        }
+      },
+      "ocr": {
+        "ocr_calls": {
+          "type": "exact",
+          "expected": 0
+        },
+        "ocr_text_present": {
+          "type": "boolean",
+          "expected": false
+        }
+      },
+      "epub": {
+        "valid": {
+          "type": "boolean",
+          "expected": true
+        },
+        "chapter_files": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "heading_tags": {
+          "type": "minimum",
+          "expected": 13
+        },
+        "nav_entries": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "empty_chapters": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "Introduction to Coastal Hydrography",
+            "1. Introduction"
+          ]
+        }
+      }
+    },
+    "twocolumn_article": {
+      "notes": [
+        "The repeating full-width gazette title is promoted to a heading/chapter per printed page; confirm that is the intended reading experience on a Kindle."
+      ],
+      "structure": {
+        "paragraphs": {
+          "type": "minimum",
+          "expected": 24
+        },
+        "page_breaks": {
+          "type": "exact",
+          "expected": 2
+        },
+        "empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "near_empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "The Gazette welcomes letters on harbor matters before noon on Fridays"
+          ]
+        },
+        "excludes": {
+          "type": "excludes",
+          "expected": [
+            "OCR-TEXT-FOR-CALL"
+          ]
+        }
+      },
+      "reading_order": {
+        "column_tokens": {
+          "type": "ordered_sequence",
+          "expected": [
+            "L1",
+            "R1",
+            "L2",
+            "R2",
+            "L3",
+            "R3",
+            "L4",
+            "R4",
+            "L1",
+            "R1",
+            "L2",
+            "R2",
+            "L3",
+            "R3",
+            "L4",
+            "R4",
+            "L1",
+            "R1",
+            "L2",
+            "R2",
+            "L3",
+            "R3",
+            "L4",
+            "R4"
+          ]
+        }
+      },
+      "ocr": {
+        "ocr_calls": {
+          "type": "exact",
+          "expected": 0
+        },
+        "ocr_text_present": {
+          "type": "boolean",
+          "expected": false
+        }
+      },
+      "epub": {
+        "valid": {
+          "type": "boolean",
+          "expected": true
+        },
+        "chapter_files": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "nav_entries": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "empty_chapters": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "The Harbor Gazette"
+          ]
+        }
+      }
+    },
+    "scanned_book": {
+      "notes": [
+        "OCR accuracy itself is not measurable with the deterministic CountingOCR double; a spot check with real Tesseract on a physical scan is recommended."
+      ],
+      "structure": {
+        "paragraphs": {
+          "type": "minimum",
+          "expected": 5
+        },
+        "page_breaks": {
+          "type": "exact",
+          "expected": 4
+        },
+        "empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "near_empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "OCR-TEXT-FOR-CALL-1",
+            "OCR-TEXT-FOR-CALL-5"
+          ]
+        }
+      },
+      "ocr": {
+        "ocr_calls": {
+          "type": "exact",
+          "expected": 5
+        },
+        "ocr_text_present": {
+          "type": "boolean",
+          "expected": true
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "OCR-TEXT-FOR-CALL-2",
+            "OCR-TEXT-FOR-CALL-4"
+          ]
+        },
+        "excludes": {
+          "type": "excludes",
+          "expected": [
+            "Tesseract",
+            "pytesseract"
+          ]
+        }
+      },
+      "images": {
+        "image_blocks": {
+          "type": "minimum",
+          "expected": 5
+        },
+        "epub_image_resources": {
+          "type": "minimum",
+          "expected": 5
+        }
+      },
+      "epub": {
+        "valid": {
+          "type": "boolean",
+          "expected": true
+        },
+        "chapter_files": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "nav_entries": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "empty_chapters": {
+          "type": "maximum",
+          "expected": 0
+        }
+      }
+    },
+    "text_with_images": {
+      "notes": [
+        "Verify figure placement and caption adjacency on a screen; the EPUB deduplicates identical figure assets, so image resource count can be below image block count."
+      ],
+      "structure": {
+        "paragraphs": {
+          "type": "minimum",
+          "expected": 10
+        },
+        "page_breaks": {
+          "type": "exact",
+          "expected": 3
+        },
+        "empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "near_empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "Figure 1",
+            "Figure 3",
+            "Survey Notes at a Glance"
+          ]
+        },
+        "excludes": {
+          "type": "excludes",
+          "expected": [
+            "OCR-TEXT-FOR-CALL"
+          ]
+        }
+      },
+      "ocr": {
+        "ocr_calls": {
+          "type": "exact",
+          "expected": 0
+        },
+        "ocr_text_present": {
+          "type": "boolean",
+          "expected": false
+        }
+      },
+      "images": {
+        "image_blocks": {
+          "type": "minimum",
+          "expected": 4
+        },
+        "epub_image_resources": {
+          "type": "minimum",
+          "expected": 3
+        }
+      },
+      "epub": {
+        "valid": {
+          "type": "boolean",
+          "expected": true
+        },
+        "chapter_files": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "nav_entries": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "empty_chapters": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "Figure 1",
+            "Survey Notes at a Glance"
+          ]
+        }
+      }
+    },
+    "headers_footers": {
+      "notes": [
+        "Manual inspection recommended: furniture removal occasionally swallows a body line that begins or ends like a header/footer string."
+      ],
+      "structure": {
+        "paragraphs": {
+          "type": "minimum",
+          "expected": 16
+        },
+        "page_breaks": {
+          "type": "exact",
+          "expected": 5
+        },
+        "empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "near_empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "The salt wind off the harbor carried the smell of rope and paint"
+          ]
+        },
+        "excludes": {
+          "type": "excludes",
+          "expected": [
+            "The Lantern Keeper",
+            "Chapter One",
+            "OCR-TEXT-FOR-CALL"
+          ]
+        }
+      },
+      "ocr": {
+        "ocr_calls": {
+          "type": "exact",
+          "expected": 0
+        },
+        "ocr_text_present": {
+          "type": "boolean",
+          "expected": false
+        }
+      },
+      "epub": {
+        "valid": {
+          "type": "boolean",
+          "expected": true
+        },
+        "chapter_files": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "nav_entries": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "empty_chapters": {
+          "type": "maximum",
+          "expected": 0
+        }
+      }
+    },
+    "unusual_typography": {
+      "notes": [
+        "Confirm paragraph boundaries around the small-caps title and the monospaced quotation render correctly on a reader."
+      ],
+      "structure": {
+        "paragraphs": {
+          "type": "minimum",
+          "expected": 12
+        },
+        "page_breaks": {
+          "type": "exact",
+          "expected": 3
+        },
+        "empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "near_empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "On the Behavior of Light",
+            "SET IN SMALL CAPS",
+            "Detail is the friend of the patient observer"
+          ]
+        },
+        "excludes": {
+          "type": "excludes",
+          "expected": [
+            "OCR-TEXT-FOR-CALL"
+          ]
+        }
+      },
+      "ocr": {
+        "ocr_calls": {
+          "type": "exact",
+          "expected": 0
+        },
+        "ocr_text_present": {
+          "type": "boolean",
+          "expected": false
+        }
+      },
+      "epub": {
+        "valid": {
+          "type": "boolean",
+          "expected": true
+        },
+        "chapter_files": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "nav_entries": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "empty_chapters": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "On the Behavior of Light",
+            "SET IN SMALL CAPS"
+          ]
+        }
+      }
+    },
+    "mixed_text_image": {
+      "notes": [
+        "Only scanned-routed pages invoke OCR; confirm the native-text/OCR split on the fully mixed page reads sensibly on a reader."
+      ],
+      "structure": {
+        "paragraphs": {
+          "type": "minimum",
+          "expected": 12
+        },
+        "page_breaks": {
+          "type": "exact",
+          "expected": 7
+        },
+        "empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "near_empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "Harbor Bulletin",
+            "First Quarter"
+          ]
+        }
+      },
+      "ocr": {
+        "ocr_calls": {
+          "type": "minimum",
+          "expected": 3
+        },
+        "ocr_text_present": {
+          "type": "boolean",
+          "expected": true
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "OCR-TEXT-FOR-CALL-1",
+            "OCR-TEXT-FOR-CALL-3"
+          ]
+        },
+        "excludes": {
+          "type": "excludes",
+          "expected": [
+            "Tesseract",
+            "pytesseract"
+          ]
+        }
+      },
+      "images": {
+        "image_blocks": {
+          "type": "minimum",
+          "expected": 3
+        },
+        "epub_image_resources": {
+          "type": "minimum",
+          "expected": 2
+        }
+      },
+      "epub": {
+        "valid": {
+          "type": "boolean",
+          "expected": true
+        },
+        "chapter_files": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "nav_entries": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "empty_chapters": {
+          "type": "maximum",
+          "expected": 0
+        }
+      }
+    },
+    "chapters_long": {
+      "notes": [
+        "All 8 chapters are detected at the PDF layer, yet the EPUB still ships a single chapter (nav_entries=1): chapter splitting is a known converter gap to address outside this milestone."
+      ],
+      "structure": {
+        "paragraphs": {
+          "type": "minimum",
+          "expected": 20
+        },
+        "headings": {
+          "type": "minimum",
+          "expected": 8
+        },
+        "chapters": {
+          "type": "minimum",
+          "expected": 8
+        },
+        "toc_entries": {
+          "type": "minimum",
+          "expected": 8
+        },
+        "page_breaks": {
+          "type": "exact",
+          "expected": 7
+        },
+        "empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "near_empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "The chapter opens with the harbor at rest"
+          ]
+        },
+        "excludes": {
+          "type": "excludes",
+          "expected": [
+            "OCR-TEXT-FOR-CALL"
+          ]
+        }
+      },
+      "ocr": {
+        "ocr_calls": {
+          "type": "exact",
+          "expected": 0
+        },
+        "ocr_text_present": {
+          "type": "boolean",
+          "expected": false
+        }
+      },
+      "epub": {
+        "valid": {
+          "type": "boolean",
+          "expected": true
+        },
+        "chapter_files": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "heading_tags": {
+          "type": "minimum",
+          "expected": 8
+        },
+        "nav_entries": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "empty_chapters": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "Chapter 1: The Harbor",
+            "Chapter 8: The Light"
+          ]
+        }
+      }
+    },
+    "edge_interleaved_blank": {
+      "notes": [
+        "Blank-interleaved pages stress blank-page handling; ensure the intentionally blank page does not produce stray artifacts on a reader."
+      ],
+      "structure": {
+        "paragraphs": {
+          "type": "minimum",
+          "expected": 2
+        },
+        "page_breaks": {
+          "type": "exact",
+          "expected": 3
+        },
+        "empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "near_empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "This page intentionally carries nothing"
+          ]
+        }
+      },
+      "ocr": {
+        "ocr_calls": {
+          "type": "minimum",
+          "expected": 2
+        },
+        "ocr_text_present": {
+          "type": "boolean",
+          "expected": true
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "OCR-TEXT-FOR-CALL-1",
+            "OCR-TEXT-FOR-CALL-2"
+          ]
+        },
+        "excludes": {
+          "type": "excludes",
+          "expected": [
+            "Tesseract",
+            "pytesseract"
+          ]
+        }
+      },
+      "epub": {
+        "valid": {
+          "type": "boolean",
+          "expected": true
+        },
+        "chapter_files": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "nav_entries": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "empty_chapters": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "This page intentionally carries nothing"
+          ]
+        }
+      }
+    },
+    "edge_short_report": {
+      "notes": [],
+      "structure": {
+        "paragraphs": {
+          "type": "minimum",
+          "expected": 3
+        },
+        "page_breaks": {
+          "type": "exact",
+          "expected": 1
+        },
+        "empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "near_empty_paragraphs": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "Minimum Viable Document",
+            "Closing note",
+            "This short report exists to give the corpus"
+          ]
+        },
+        "excludes": {
+          "type": "excludes",
+          "expected": [
+            "OCR-TEXT-FOR-CALL"
+          ]
+        }
+      },
+      "ocr": {
+        "ocr_calls": {
+          "type": "exact",
+          "expected": 0
+        },
+        "ocr_text_present": {
+          "type": "boolean",
+          "expected": false
+        }
+      },
+      "epub": {
+        "valid": {
+          "type": "boolean",
+          "expected": true
+        },
+        "chapter_files": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "nav_entries": {
+          "type": "minimum",
+          "expected": 1
+        },
+        "empty_chapters": {
+          "type": "maximum",
+          "expected": 0
+        },
+        "contains": {
+          "type": "contains",
+          "expected": [
+            "Minimum Viable Document",
+            "Closing note"
+          ]
+        }
+      }
+    }
+  }
+}
