@@ -20,8 +20,11 @@ and fixed at the architectural level (see the Milestone 7 checklist below).
 cover is supplied, a bounded window of early pages is examined and a
 confidently detected cover page is used as the EPUB cover — deterministically,
 offline, and conservatively, with weak, ambiguous, or absent evidence
-producing the pre-M7.2 coverless EPUB. Milestone 7.3 (AZW3 process hardening)
-remains future work. The repository is at an initial **0.1.0** release state; see
+producing the pre-M7.2 coverless EPUB. **Milestone 7.3 (AZW3 process
+hardening) is also complete**: the Calibre subprocess is launched with a
+hidden Windows console so the app does not create a visible console while
+preserving the existing conversion behavior, output validation, and error
+handling. The repository is at an initial **0.1.0** release state; see
 the [CHANGELOG](CHANGELOG.md), the [release checklist](docs/release-checklist.md),
 and the "Known limitations" section below.
 
@@ -1068,7 +1071,10 @@ Key facts about the M4.3 feature:
   no shell interpolation, paths stay separate arguments (spaces are safe),
   the return code is checked, and a missing/unrunnable executable or a
   non-zero exit surfaces as a dedicated project error (not a raw
-  `FileNotFoundError`/`CalledProcessError`).
+  `FileNotFoundError`/`CalledProcessError`). On Windows, the child process is
+  launched with a hidden console (`CREATE_NO_WINDOW` + `STARTUPINFO`) so the
+  app does not open a visible console window while preserving the same
+  behavior.
 * **Error taxonomy.** `AZW3ConversionError` is the base class;
   `AZW3BackendUnavailableError` (Calibre not found), `AZW3ConversionFailedError`
   (non-zero exit, with a bounded diagnostic excerpt), `AZW3InvalidInputError`
@@ -1554,7 +1560,7 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   ambiguity margin; an explicit cover always wins and short-circuits
   detection, and a detected cover is carried through the unchanged M4.4 EPUB
   contract; regression tests in `tests/test_cover_detection.py`)
-* [ ] AZW3 process hardening (M7.3; future work — not implemented here)
+* [x] AZW3 process hardening (M7.3; the Calibre subprocess window is hidden on Windows without changing conversion behavior)
 
 No web version is planned or implemented; the supported interface remains the
 Windows desktop application (M5) and the programmatic pipeline API (M5.1).

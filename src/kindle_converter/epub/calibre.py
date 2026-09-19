@@ -38,6 +38,20 @@ from .azw3 import (
     AZW3ConversionFailedError,
 )
 
+
+def _windows_run_kwargs() -> dict[str, object]:
+    """Hide Calibre's console window on Windows without changing behavior."""
+    if os.name != "nt":
+        return {}
+
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = subprocess.SW_HIDE
+    return {
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        "startupinfo": startupinfo,
+    }
+
 PathLike = str | os.PathLike[str]
 
 #: The Calibre executable invoked for EPUB -> AZW3 conversion.
@@ -153,15 +167,16 @@ class CalibreBackend:
         """
         executable = self._resolve_executable()
         command = build_calibre_command(executable, source, destination)
+        run_kwargs = {
+            "shell": False,
+            "capture_output": True,
+            "text": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+        }
+        run_kwargs.update(_windows_run_kwargs())
         try:
-            process = subprocess.run(
-                command,
-                shell=False,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
+            process = subprocess.run(command, **run_kwargs)
         except OSError as exc:
             raise AZW3BackendUnavailableError(
                 f"could not run the Calibre executable "

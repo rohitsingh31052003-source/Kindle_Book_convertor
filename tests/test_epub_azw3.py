@@ -309,6 +309,40 @@ class TestSubprocessBehavior:
         assert destination.is_file()
         assert destination.stat().st_size > 0
 
+    def test_windows_launch_hides_console_window(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        import kindle_converter.epub.calibre as calibre_module
+
+        source = _make_epub(tmp_path)
+        destination = tmp_path / "out.azw3"
+        exe = _existing_exe(tmp_path)
+        instance = StubSubprocess()
+
+        monkeypatch.setattr(calibre_module.os, "name", "nt", raising=False)
+        monkeypatch.setattr(
+            calibre_module.subprocess,
+            "STARTUPINFO",
+            lambda: type("StartupInfo", (), {"dwFlags": 0, "wShowWindow": 0})(),
+            raising=False,
+        )
+        monkeypatch.setattr(calibre_module.subprocess, "STARTF_USESHOWWINDOW", 1, raising=False)
+        monkeypatch.setattr(calibre_module.subprocess, "SW_HIDE", 0, raising=False)
+        monkeypatch.setattr(
+            calibre_module.subprocess,
+            "CREATE_NO_WINDOW",
+            0x08000000,
+            raising=False,
+        )
+        monkeypatch.setattr(calibre_module.subprocess, "run", instance)
+
+        convert_epub_to_azw3(source, destination, calibre_path=exe)
+
+        _, kwargs = instance.calls[-1]
+        assert kwargs["creationflags"] == 0x08000000
+        assert kwargs["startupinfo"].dwFlags & calibre_module.subprocess.STARTF_USESHOWWINDOW
+        assert kwargs["startupinfo"].wShowWindow == calibre_module.subprocess.SW_HIDE
+
     def test_successful_conversion_verifies_output_and_returns_result(
         self, tmp_path: Path, stub_subprocess: StubSubprocess
     ) -> None:
