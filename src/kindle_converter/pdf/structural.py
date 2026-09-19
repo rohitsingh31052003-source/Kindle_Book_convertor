@@ -70,6 +70,7 @@ from .headings import HeadingLayout
 from .header_footer import HeaderFooterLayout
 from .images import ImageExtractionResult
 from .layout import LayoutPage, PageLayout
+from .models import PDFType
 from .paragraphs import (
     ParagraphLayout,
     ParagraphPage,
@@ -236,7 +237,17 @@ def _combine_paragraph_pages(
     results: Sequence[PageProcessingResult],
     native_paragraph_layout: ParagraphLayout | None,
 ) -> ParagraphLayout:
-    """Merge native + OCR paragraphs into one per-page layout."""
+    """Merge native + OCR paragraphs into one per-page layout.
+
+    Per page the composition follows the M3.5 routing contract documented in
+    the module docstring: ``TEXT`` pages contribute native paragraphs only,
+    ``SCANNED`` pages contribute OCR paragraphs only (their native text is
+    ``None`` by the M3.5 layer, so nothing is reconstructed even when the
+    native layout happens to carry stray blocks), and ``MIXED`` pages keep
+    native paragraphs first with the OCR paragraphs after them. The page
+    reference stays the native geometry page when one exists so page
+    boundaries and geometry are never lost.
+    """
 
     native_pages: dict[int, ParagraphPage] = {}
     if native_paragraph_layout is not None:
@@ -248,26 +259,22 @@ def _combine_paragraph_pages(
         page_number = result.page_number
         ocr_paragraphs = _ocr_paragraphs_for_page(result)
         native_page = native_pages.get(page_number)
-        if native_page is not None and ocr_paragraphs:
-            combined.append(
-                ParagraphPage(
-                    page=native_page.page,
-                    paragraphs=native_page.paragraphs + ocr_paragraphs,
-                )
+        paragraphs = ocr_paragraphs
+        if (
+            result.classification is not PDFType.SCANNED
+            and native_page is not None
+        ):
+            paragraphs = native_page.paragraphs + paragraphs
+        combined.append(
+            ParagraphPage(
+                page=(
+                    native_page.page
+                    if native_page is not None
+                    else _shell_page(page_number)
+                ),
+                paragraphs=paragraphs,
             )
-        elif native_page is not None:
-            combined.append(native_page)
-        elif ocr_paragraphs:
-            combined.append(
-                ParagraphPage(
-                    page=_shell_page(page_number),
-                    paragraphs=ocr_paragraphs,
-                )
-            )
-        else:
-            combined.append(
-                ParagraphPage(page=_shell_page(page_number), paragraphs=())
-            )
+        )
     return ParagraphLayout(pages=tuple(combined))
 
 

@@ -148,6 +148,33 @@ def make_mixed_pdf(path: Path) -> Path:
     return path
 
 
+def make_scanned_first_pdf(path: Path, *, pages: int = 2) -> Path:
+    """A scanned-looking first page, then text pages.
+
+    Page 1 is a full-page raster (so it classifies SCANNED) that in real
+    books can still carry a short native line -- a folio, a stray string, or
+    a hidden text layer -- which the M3.1 analyzer (24-char threshold) does
+    not consider meaningful. This is the reproduction of the reported
+    "unexpected first page": that native fragment used to leak into the
+    EPUB as the opening content alongside the OCR text.
+    """
+    doc = pymupdf.open()
+    page = doc.new_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
+    page.insert_image(pymupdf.Rect(40, 40, 555, 800), pixmap=_pixmap())
+    page.insert_text((72, 90), "STRAY FOLIO", fontname="helv", fontsize=10)
+    for _ in range(pages - 1):
+        text = doc.new_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
+        text.insert_textbox(
+            pymupdf.Rect(72, 120, 500, 700),
+            f"{TEXT_LINE}\n\n{SECOND_LINE}",
+            fontname="helv",
+            fontsize=12,
+        )
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
 # --------------------------------------------------------------------------- #
 # EPUB inspection helpers
 # --------------------------------------------------------------------------- #
@@ -521,6 +548,84 @@ class TestNavigation:
             "chapter-01.xhtml",
             "chapter-02.xhtml",
         ]
+
+
+# --------------------------------------------------------------------------- #
+# M7.1: the first linear page is real book content, never a generated page
+# --------------------------------------------------------------------------- #
+
+
+def _spine_itemrefs(opf: str) -> list[tuple[str, bool]]:
+    """(idref, is_linear) pairs in spine order from a raw content.opf."""
+    pairs: list[tuple[str, bool]] = []
+    for itemref in re.findall(r"<itemref[^>]*?/>", opf):
+        idref = re.search(r'idref="([^"]+)"', itemref).group(1)
+        pairs.append((idref, 'linear="no"' not in itemref))
+    return pairs
+
+
+class TestFirstPageIsRealContent:
+    def test_nav_is_in_the_spine_but_non_linear(self, tmp_path) -> None:
+        pdf = make_text_pdf(tmp_path / "text.pdf", pages=1, title="Text Book")
+        out = tmp_path / "text.epub"
+
+        convert_pdf_to_epub(pdf, out)
+
+        # The navigation document stays first in the spine (discoverable for
+        # EPUB 2 readers via the NCX path) but is marked non-linear, so no
+        # reader can page it as the book's first content page.
+        assert _spine_itemrefs(package_opf(out)) == [
+            ("nav", False),
+            ("chapter-00", True),
+        ]
+
+    def test_cover_page_stays_linear_nav_does_not(self, tmp_path) -> None:
+        out = tmp_path / "covered.epub"
+        book = _structured_book()
+        book.cover = Image(data=PNG_BYTES, content_type="image/png")
+        build_epub(book, out)
+
+        assert _spine_itemrefs(package_opf(out)) == [
+            ("nav", False),
+            ("cover", True),
+            ("chapter-00", True),
+            ("chapter-01", True),
+            ("chapter-02", True),
+        ]
+
+    def test_scanned_first_page_does_not_leak_native_fragments(
+        self, tmp_path
+    ) -> None:
+        pdf = make_scanned_first_pdf(
+            tmp_path / "scanned_first.pdf", pages=3
+        )
+        out = tmp_path / "scanned_first.epub"
+
+        convert_pdf_to_epub(
+            pdf, out, engine=FakeOCREngine(["Recovered cover scan text."])
+        )
+
+        # The scanned first page contributes its OCR text only; the stray
+        # native fragment that is invisible/unmeaningful in the source must
+        # never become the EPUB's opening content ("STRAY FOLIO" is not in
+        # the recovered reading flow).
+        body = full_bodies(out)
+        assert "STRAY FOLIO" not in body
+        assert "Recovered cover scan text." in body
+        assert body.index("Recovered cover scan text.") < body.index(
+            "Winston Smith"
+        )
+
+    def test_text_only_first_linear_page_is_the_chapter(self, tmp_path) -> None:
+        pdf = make_text_pdf(tmp_path / "text.pdf", pages=2, title="Text Book")
+        out = tmp_path / "text.epub"
+
+        convert_pdf_to_epub(pdf, out)
+
+        with read_archive(out) as archive:
+            first = chapter_bodies(archive)[0]
+        # Page 1 content opens the reading flow; no leading page-break div.
+        assert first.lstrip().startswith("<p>")
 
 
 # --------------------------------------------------------------------------- #

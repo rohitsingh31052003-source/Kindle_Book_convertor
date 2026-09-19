@@ -212,6 +212,12 @@ def _build_epub_book(book: Book, language: str | None) -> epub.EpubBook:
     ``src`` attributes and the registered EPUB resources can never drift
     apart.
 
+    The navigation document leads the spine but is marked ``linear="no"``
+    (EbookLib ``("nav", "no")``): it remains a discoverable spine entry for
+    EPUB 2 readers while never being paged as a reading-order document, so
+    the book's first *linear* page is always the first chapter (or the
+    cover page, when one is set).
+
     Chapter titles are represented semantically as the chapter document's
     title and its navigation entry; the chapter body is exactly the
     author's block sequence, which already contains the book's own headings.
@@ -267,9 +273,9 @@ def _build_epub_book(book: Book, language: str | None) -> epub.EpubBook:
     epub_book.add_item(epub.EpubNcx())
     epub_book.add_item(epub.EpubNav())
     if book.cover is not None:
-        epub_book.spine = ["nav", COVER_PAGE_ID, *chapters]
+        epub_book.spine = [("nav", "no"), COVER_PAGE_ID, *chapters]
     else:
-        epub_book.spine = ["nav", *chapters]
+        epub_book.spine = [("nav", "no"), *chapters]
     return epub_book
 
 

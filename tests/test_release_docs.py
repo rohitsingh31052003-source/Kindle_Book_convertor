@@ -8,8 +8,9 @@ drift without building a documentation framework:
 * the changelog head entry matches the single version source
   (``pyproject.toml ``[project] version``) and the release-checklist states the
   current version nowhere except through the single source;
-* the README roadmap marks M6.6 (and therefore M6) complete and marks no
-  future milestone complete;
+* the README roadmap marks M6.6 (and therefore M6) complete and follows the
+  monotonic milestone contract (sections before the highest milestone are fully
+  checked, the newest milestone may mix completed and future items);
 * the release-readiness tool (``build_tools/release_check.py``) reports no
   findings on the current repository.
 

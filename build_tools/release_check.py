@@ -118,51 +118,108 @@ def changelog_head_mismatch(repo_root: Path, version: str) -> str | None:
     return None
 
 
-def readme_roadmap_issues(readme_text: str) -> list[str]:
-    """README roadmap state checks: M6 complete, M6.6 complete, no false future.
+_MILESTONE_HEADING = re.compile(r"^### Milestone (\S+)", re.MULTILINE)
 
-    ``### Milestone 6`` must exist, have no remaining unchecked checklist items,
-    mark the Documentation and Release preparation entries complete, mention
-    M6.6, and the roadmap must not mark any later milestone complete.
+
+def _milestone_sections(readme_text: str) -> list[tuple[str, str]]:
+    """Return ``(number, section-text)`` for each ``### Milestone N`` block.
+
+    A section spans from its own heading to the next ``###`` or ``##`` heading,
+    so a later milestone never bleeds its items into an earlier section's scan.
+    """
+    matches = list(_MILESTONE_HEADING.finditer(readme_text))
+    sections: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        start = match.end()
+        number = match.group(1)
+        if index + 1 < len(matches):
+            end = matches[index + 1].start()
+        else:
+            end = readme_text.find("\n## ", start)
+            if end == -1:
+                end = len(readme_text)
+        sections.append((number, readme_text[start:end]))
+    return sections
+
+
+def _unchecked_items(section_text: str) -> list[str]:
+    """Checklist lines in a milestone section that are still open."""
+    return [
+        line.strip()
+        for line in section_text.splitlines()
+        if line.strip().startswith(("* [ ]", "- [ ]"))
+    ]
+
+
+def readme_roadmap_issues(readme_text: str) -> list[str]:
+    """README roadmap state checks: honest, monotonic completion claims.
+
+    Milestone sections are ``### Milestone N`` blocks. The release gate is
+    strict for the released milestone: Milestone 6 must be entirely checked
+    and mark the Documentation (M6.6) and Release preparation entries complete
+    and mention M6.6. Middle milestones must have no open items unless a line
+    is explicitly tagged as future work (e.g. Milestone 5's drag-and-drop
+    note). The highest numbered section is the current roadmap state and may
+    legitimately mix completed items (``[x]`` M7.1) with future ones (``[ ]``
+    M7.2 / M7.3) -- but no completed line may reference a milestone beyond the
+    highest roadmap section, so the roadmap never overstates its own future.
     """
     issues: list[str] = []
-    start = readme_text.find("### Milestone 6")
-    if start == -1:
+    sections = _milestone_sections(readme_text)
+    if not sections:
+        issues.append("README roadmap has no `### Milestone` sections")
+        return issues
+
+    m6 = next(((number, section) for number, section in sections if number == "6"), None)
+    if m6 is None:
         issues.append("README roadmap has no `### Milestone 6` section")
         return issues
-    end = readme_text.find("\n## ", start)
-    section = readme_text[start:] if end == -1 else readme_text[start:end]
-
-    unchecked = [
-        line.strip()
-        for line in section.splitlines()
-        if line.strip().startswith("* [ ]") or line.strip().startswith("- [ ]")
-    ]
+    m6_section = m6[1]
+    unchecked = _unchecked_items(m6_section)
     if unchecked:
         issues.append(
             "Milestone 6 roadmap still has unchecked items: " + "; ".join(unchecked)
         )
-    if "[x] Documentation" not in section:
+    if "[x] Documentation" not in m6_section:
         issues.append("Milestone 6 roadmap does not mark Documentation (M6.6) complete")
-    if "[x] Release preparation" not in section:
+    if "[x] Release preparation" not in m6_section:
         issues.append("Milestone 6 roadmap does not mark Release preparation (M6.6) complete")
-    if "M6.6" not in section:
+    if "M6.6" not in m6_section:
         issues.append("Milestone 6 roadmap does not mention M6.6")
 
-    roadmap_start = readme_text.find("## Development Roadmap")
-    if roadmap_start != -1:
-        roadmap_end = readme_text.find("\n## ", roadmap_start + 1)
-        roadmap = (
-            readme_text[roadmap_start:]
-            if roadmap_end == -1
-            else readme_text[roadmap_start:roadmap_end]
-        )
-        for line in roadmap.splitlines():
-            if "[x]" not in line:
-                continue
-            if re.search(r"\bM(?:6\.[7-9]|[7-9](?:\.[0-9]+)?)\b", line):
-                issues.append(f"roadmap marks a milestone after M6.6 complete: {line.strip()}")
+    highest_major = max(_milestone_major(number) for number, _ in sections)
+    last_section = sections[-1][1]
+
+    for number, section_text in sections[:-1]:
+        if number == m6[0]:
+            continue
+        open_items = [
+            line
+            for line in _unchecked_items(section_text)
+            if "future work" not in line and "not implemented" not in line
+        ]
+        if open_items:
+            issues.append(
+                f"Milestone {number} roadmap has unchecked non-future items: "
+                + "; ".join(open_items)
+            )
+
+    for line in last_section.splitlines():
+        if "[x]" not in line:
+            continue
+        for number in re.findall(r"\bM(\d+(?:\.\d+)?)\b", line):
+            if _milestone_major(number) > highest_major:
+                issues.append(
+                    f"roadmap marks a milestone beyond M{highest_major} complete: "
+                    + line.strip()
+                )
     return issues
+
+
+def _milestone_major(number: str) -> int:
+    """Major number of a milestone label like ``"1.0"`` or ``"7"``."""
+    match = re.search(r"\d+", number)
+    return int(match.group(0)) if match else 0
 
 
 def tracked_release_dirs(repo_root: Path) -> tuple[str, list[str]]:

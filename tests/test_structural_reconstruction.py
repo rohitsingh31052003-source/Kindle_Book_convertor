@@ -366,6 +366,65 @@ class TestMixedPages:
 
 
 # --------------------------------------------------------------------------- #
+# Scanned pages: OCR only (native layout text is never re-emitted)
+# --------------------------------------------------------------------------- #
+
+
+class TestScannedPages:
+    def test_scanned_page_native_blocks_are_not_emitted(self) -> None:
+        """A SCANNED page contributes its OCR paragraphs only.
+
+        Even when the native layout happens to carry text blocks (a stray
+        line, a folio, or a hidden text layer, none of which the M3.1
+        analyzer considers meaningful), the M3.5 routing contract says a
+        SCANNED page's native text is ``None``: the M3.6 integration must
+        not rebuild those blocks into body content. This is the defect that
+        put unexpected native fragments onto a scanned first page of the
+        EPUB.
+        """
+        stray = _block(
+            "stray hidden line on a scanned page", (_line("stray line", 100.0, 0),)
+        )
+        layout = PageLayout(
+            pages=(_page(1, [stray]), _page(2, []))
+        )
+        results = [
+            _ocr_result(1, "Ocr of the scanned first page."),
+            _ocr_result(2, "Ocr of the second scanned page."),
+        ]
+        document = reconstruct_processed_pages(results, layout=layout)
+
+        assert document.page_count == 2
+        assert _element_sources(document) == [
+            (1, TextSource.OCR, "Ocr of the scanned first page."),
+            (2, TextSource.OCR, "Ocr of the second scanned page."),
+        ]
+        assert "stray hidden line" not in _element_snapshot(document)
+
+    def test_scanned_page_keeps_geometry_and_page_breaks(self) -> None:
+        """The scanned page still exists in the Book with its transition."""
+        stray = _block(
+            "stray", (_line("stray", 100.0, 0),)
+        )
+        layout = PageLayout(
+            pages=(_page(1, [stray]), _page(2, []))
+        )
+        results = [
+            _ocr_result(1, "First scanned page text."),
+            _ocr_result(2, "Second scanned page text."),
+        ]
+        book = processed_pages_to_book(
+            results, BookMetadata(title="Scanned"), layout=layout
+        )
+        blocks = book.chapters[0].blocks
+        breaks = [b for b in blocks if isinstance(b, PageBreak)]
+        assert len(breaks) == 1
+        texts = [b.text for b in blocks if isinstance(b, Paragraph)]
+        assert texts[0] == "First scanned page text."
+        assert all("stray" != t and "stray" not in t for t in texts)
+
+
+# --------------------------------------------------------------------------- #
 # Validation / determinism
 # --------------------------------------------------------------------------- #
 

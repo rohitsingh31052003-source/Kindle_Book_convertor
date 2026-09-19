@@ -10,8 +10,15 @@ The project is being developed as a local-first conversion engine that can handl
 is finished**: the M6.1 representative corpus, M6.2 regression harness, M6.3
 conversion-quality measurement, M6.4 performance measurement, M6.5 Windows
 packaging, and M6.6 documentation + release engineering milestones are all
-implemented. The repository is at an initial **0.1.0** release state; see the
-[CHANGELOG](CHANGELOG.md), the [release checklist](docs/release-checklist.md),
+implemented. **Milestone 7.1 (First-Page Investigation and Root-Cause Fix) is
+also complete**: the two mechanisms by which a generated EPUB could open with
+an "unexpected first page" that the source PDF does not contain — the native
+text of a *scanned* page being re-emitted alongside its OCR text, and the EPUB
+navigation document being a *linear* spine entry — were reproduced, root-caused,
+and fixed at the architectural level (see the Milestone 7 checklist below).
+Milestones 7.2 (automatic cover detection) and 7.3 (AZW3 process hardening)
+remain future work. The repository is at an initial **0.1.0** release state; see
+the [CHANGELOG](CHANGELOG.md), the [release checklist](docs/release-checklist.md),
 and the "Known limitations" section below.
 
 The repository is at the end of **Milestone 5**. Every M5 sub-milestone, M5.1
@@ -1452,6 +1459,32 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   changelog in `CHANGELOG.md`, and a lightweight release validator
   `build_tools/release_check.py` reusing the M6.5 package verifier; M6 is
   complete)
+
+### Milestone 7 — Robustness on Real-World PDFs
+
+* [x] First-Page Investigation and Root-Cause Fix (M7.1; investigate and fix
+  the "unexpected first page" reported on a real 468-page PDF (446 TEXT / 22
+  SCANNED / 0 MIXED pages): the investigation reproduced both mechanisms that
+  could open an EPUB with a page the source PDF does not contain, proved the
+  routing contract was being violated (a page classified `SCANNED` had its
+  native layout text re-emitted alongside its OCR text), and fixed both at the
+  root, never by deleting first-page content:
+  - the structural integration now honors the M3.5/M3.6 routing contract —
+    `TEXT` pages stay native-only, `SCANNED` pages contribute their OCR
+    paragraphs only, and `MIXED` pages keep native + OCR (regression tests in
+    `tests/test_structural_reconstruction.py`);
+  - the EPUB navigation document leads the spine but is now marked
+    `linear="no"`, so no reading system can page the generated TOC as the
+    book's first content page while the navigation stays discoverable
+    (regression tests in `tests/test_kindle_epub.py`);
+  - no cover page is auto-generated (M4.4 cover remains explicit user input
+    only) and no metadata/title/front-matter page is ever fabricated; the
+    first *linear* EPUB page is always real book content)
+* [ ] Automatic cover detection (M7.2; future work — not implemented here)
+* [ ] AZW3 process hardening (M7.3; future work — not implemented here)
+
+No web version is planned or implemented; the supported interface remains the
+Windows desktop application (M5) and the programmatic pipeline API (M5.1).
 
 ## Project Philosophy
 
