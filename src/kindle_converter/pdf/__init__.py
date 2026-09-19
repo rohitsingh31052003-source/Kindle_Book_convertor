@@ -76,6 +76,17 @@ M2 stack byte-identically for native text, and appends OCR-derived body
 paragraphs page by page (native first, then OCR) for SCANNED/MIXED pages.
 OCR paragraphs carry ``TextSource.OCR`` and no fabricated geometry.
 
+The ``cover_detection`` submodule (Milestone 7.2) is the automatic cover
+selection service: given the M3.1 analysis, the M2.1 layout, and the M3.5
+routing results of one document, it measures a bounded window of early pages
+(``measure_cover_signals``), scores them with documented deterministic
+weights (``score_cover_page``), and applies an explicit confidence threshold
+plus an ambiguity margin (``decide_cover_page``) before materializing the
+selected page as a PNG cover image through the M3.2 renderer
+(``materialize_cover_page``). ``select_cover`` applies the M7.2 precedence --
+explicit cover, then confidently detected cover, then no cover -- and no
+detection ever runs when an explicit cover exists.
+
 Since M4.1 the resulting :class:`~kindle_converter.document.models.Book`
 (with M2.13 images attached) is the single input of the EPUB layer:
 ``kindle_converter.convert_pdf_to_epub`` composes ``convert_pdf_to_book``
@@ -301,6 +312,26 @@ from .structural import (
     reconstruct_processed_pages,
 )
 
+# Automatic cover selection API (Milestone 7.2)
+from .cover_detection import (
+    COVER_AMBIGUITY_MARGIN,
+    COVER_CANDIDATE_WINDOW,
+    COVER_CONFIDENCE_THRESHOLD,
+    COVER_RENDER_DPI,
+    CoverCandidate,
+    CoverDecision,
+    CoverPageSignals,
+    CoverSelection,
+    CoverSelectionSource,
+    decide_cover_page,
+    detect_cover,
+    document_median_text_chars,
+    materialize_cover_page,
+    measure_cover_signals,
+    score_cover_page,
+    select_cover,
+)
+
 __all__ = [
     "PDFAnalysis",
     "PDFAnalysisError",
@@ -471,4 +502,21 @@ __all__ = [
     # OCR-aware structural reconstruction (Milestone 3.6)
     "processed_pages_to_book",
     "reconstruct_processed_pages",
+    # Automatic cover selection (Milestone 7.2)
+    "COVER_AMBIGUITY_MARGIN",
+    "COVER_CANDIDATE_WINDOW",
+    "COVER_CONFIDENCE_THRESHOLD",
+    "COVER_RENDER_DPI",
+    "CoverCandidate",
+    "CoverDecision",
+    "CoverPageSignals",
+    "CoverSelection",
+    "CoverSelectionSource",
+    "decide_cover_page",
+    "detect_cover",
+    "document_median_text_chars",
+    "materialize_cover_page",
+    "measure_cover_signals",
+    "score_cover_page",
+    "select_cover",
 ]

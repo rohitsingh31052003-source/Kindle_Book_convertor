@@ -16,8 +16,12 @@ an "unexpected first page" that the source PDF does not contain — the native
 text of a *scanned* page being re-emitted alongside its OCR text, and the EPUB
 navigation document being a *linear* spine entry — were reproduced, root-caused,
 and fixed at the architectural level (see the Milestone 7 checklist below).
-Milestones 7.2 (automatic cover detection) and 7.3 (AZW3 process hardening)
-remain future work. The repository is at an initial **0.1.0** release state; see
+**Milestone 7.2 (Automatic Cover Selection) is also complete**: when no explicit
+cover is supplied, a bounded window of early pages is examined and a
+confidently detected cover page is used as the EPUB cover — deterministically,
+offline, and conservatively, with weak, ambiguous, or absent evidence
+producing the pre-M7.2 coverless EPUB. Milestone 7.3 (AZW3 process hardening)
+remains future work. The repository is at an initial **0.1.0** release state; see
 the [CHANGELOG](CHANGELOG.md), the [release checklist](docs/release-checklist.md),
 and the "Known limitations" section below.
 
@@ -1111,9 +1115,10 @@ convert_pdf_to_book("book.pdf", engine, cover=cover)
 
 Key facts about the M4.4 feature:
 
-* **Explicit and optional.** The cover is never auto-detected — no PDF
-  filename heuristics, no first-page analysis, no image classification.
-  A `Book` (or EPUB) without a cover renders exactly as before.
+* **Explicit and optional.** An explicit cover is never auto-detected and
+  always wins: no PDF filename heuristics, no image classification, and no
+  detection runs at all. A `Book` (or EPUB) without a supplied cover renders
+  exactly as before unless a cover is confidently auto-detected (M7.2 below).
 * **Validated early.** `cover` is resolved through
   `kindle_converter.document.load_cover` before the PDF is even opened, so a
   missing file, unreadable path, empty data, or unsupported format fails
@@ -1140,6 +1145,67 @@ Key facts about the M4.4 feature:
 
 ```text
 Book → build_epub() → EPUB (cover: properties="cover-image" + name="cover" + cover.xhtml)
+```
+
+### Automatic cover selection (M7.2)
+
+M7.2 adds a single conservative step between the two M4.4 states: when no
+explicit cover is supplied, the converter looks at a bounded window of early
+pages and selects a page as the cover *only* when the evidence is clear. The
+resolved precedence is therefore:
+
+```text
+explicit user cover  >  automatically detected cover  >  no cover
+```
+
+Detection is a small, deterministic service inside the PDF layer
+(`kindle_converter.pdf.cover_detection` through the `select_cover` /
+`detect_cover` API) that reuses the existing milestones and never re-reads
+page text:
+
+* `measure_cover_signals` measures only the first `COVER_CANDIDATE_WINDOW` (5)
+  pages, so detection cost is independent of document length;
+* `score_cover_page` applies fixed rejection gates in a fixed order — blank
+  pages, pages that are not image-dominated, untexted pages that are not
+  (almost) a full-page image, pages in a book with no text evidence at all,
+  table-of-contents text, copyright/title-page front matter, body-text-mass,
+  and text that is not short (in absolute and book-relative terms) — and then
+  accumulates documented weights (image coverage, early position, title-like
+  text, portrait orientation);
+* `decide_cover_page` selects the top candidate only when it reaches
+  `COVER_CONFIDENCE_THRESHOLD` (55) **and** leads the runner-up by at least
+  `COVER_AMBIGUITY_MARGIN` (12); a tie, a close race, or no eligible page
+  yields the pre-M7.2 coverless EPUB;
+* `materialize_cover_page` renders the selected page through the existing M3.2
+  renderer at `COVER_RENDER_DPI` (200) as PNG, so the cover shows the page as
+  displayed (image, vector art, and overlaid text).
+
+Design guarantees:
+
+* **A cover is never guessed.** First page is one weighted signal among
+  several, never an assumption: a first page that is body text, blank, a
+  table of contents, copyright front matter, or not image-dominated is
+  rejected, and page 2 (or later within the window) can win (e.g. a prose
+  title page followed by a cover plate). Weak or ambiguous evidence means
+  *no* cover, and the EPUB matches the pre-M7.2 coverless output byte for
+  byte in structure.
+* **No new machinery.** No OCR engine, image classifier, machine-learning
+  model, network service, or filename heuristic is involved; detection is a
+  pure function of the analysis (M3.1), routing (M3.5), and layout (M2.1)
+  results and consumes the same per-page text the pipeline already produced
+  (a SCANNED page's OCR text, a TEXT/MIXED page's native text — so the M7.1
+  scanned-first-page fix is preserved by construction).
+* **An explicit cover always wins and short-circuits detection entirely.**
+  When `cover` is supplied no detection runs at all, and a detected cover is
+  carried exactly like an explicit one: a PNG `Book.cover`, the unchanged
+  M4.4 `cover.xhtml` / `properties="cover-image"` / `name="cover"` contract,
+  a linear cover page, and a non-linear nav. Reconstructed content is never
+  modified: like M4.4's explicit cover, the auto-detected cover is a reading
+  step *in addition to* the reconstructed document, and the source page stays
+  in content exactly as it does for a covered M4.4 book.
+
+```text
+PDF → analysis + routing + layout → measure → score → decide → render page → Book.cover
 ```
 
 ### Kindle-specific formatting (M4.5)
@@ -1477,10 +1543,17 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
     `linear="no"`, so no reading system can page the generated TOC as the
     book's first content page while the navigation stays discoverable
     (regression tests in `tests/test_kindle_epub.py`);
-  - no cover page is auto-generated (M4.4 cover remains explicit user input
-    only) and no metadata/title/front-matter page is ever fabricated; the
-    first *linear* EPUB page is always real book content)
-* [ ] Automatic cover detection (M7.2; future work — not implemented here)
+  - no metadata/title/front-matter page is ever fabricated and no cover page
+    is invented from book filename or metadata; the first *linear* EPUB page
+    is always real book content (M7.2 may add a real detected cover page
+    ahead of it, never a fabricated one)
+* [x] Automatic cover selection (M7.2; deterministic, offline, and
+  conservative: a bounded window of early pages is measured from the existing
+  M3.1/M3.5/M2.1 results, filtered by documented rejection gates, scored with
+  weighted evidence, and selected only at a confidence threshold with an
+  ambiguity margin; an explicit cover always wins and short-circuits
+  detection, and a detected cover is carried through the unchanged M4.4 EPUB
+  contract; regression tests in `tests/test_cover_detection.py`)
 * [ ] AZW3 process hardening (M7.3; future work — not implemented here)
 
 No web version is planned or implemented; the supported interface remains the

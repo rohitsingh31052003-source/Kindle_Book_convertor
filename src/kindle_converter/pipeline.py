@@ -30,8 +30,13 @@ M4.4 adds an optional, keyword-only ``cover`` to both entry points: a
 filesystem path or an in-memory
 :class:`~kindle_converter.document.models.Image`, resolved and validated
 explicitly through :func:`kindle_converter.document.load_cover` before any
-PDF work runs. Covers are never auto-detected; without one, the book (and
-its EPUB) is exactly as before.
+PDF work runs. M7.2 keeps that contract and adds one conservative step behind
+it: when ``cover`` is ``None`` the first few pages are examined for a
+confidently detectable cover (``kindle_converter.pdf.select_cover``) and, if
+one is found, that page is materialized as a PNG image and used as the
+``Book.cover``. An explicit cover still wins unconditionally, no detection
+runs at all in that case, and a weak or ambiguous document simply receives no
+cover -- exactly the M4.4 behavior.
 """
 
 from __future__ import annotations
@@ -42,7 +47,7 @@ import pymupdf
 
 from .document import Book, Image, load_cover
 from .epub import build_epub
-from .pdf import PDFReadError, analyze_pdf, extract_pdf_images
+from .pdf import PDFReadError, analyze_pdf, extract_pdf_images, select_cover
 from .pdf.layout import extract_page_layout
 from .pdf.metadata import extract_pdf_metadata
 from .pdf.ocr import OCREngine
@@ -126,7 +131,10 @@ def convert_pdf_to_epub(
         :class:`~kindle_converter.document.models.Image`. Validated through
         :func:`kindle_converter.document.load_cover` before the PDF is even
         opened, so a bad cover fails fast and no output is written. When
-        ``None`` (default) the EPUB has no cover, exactly as before.
+        ``None`` (default) no explicit cover is used, and M7.2 automatic
+        cover detection runs: a confidently detected early page becomes the
+        EPUB cover, and a document with no confident candidate produces the
+        pre-M7.2 coverless EPUB. An explicit cover is never overridden.
 
     Returns
     -------
@@ -221,8 +229,10 @@ def convert_pdf_to_book(
         :class:`~kindle_converter.document.models.Image`. Resolved and
         validated through :func:`kindle_converter.document.load_cover` before
         the PDF is even opened, so a bad cover fails fast and no extraction
-        work is wasted. When ``None`` (default) the returned ``Book`` has no
-        cover, exactly as before.
+        work is wasted. When ``None`` (default) the returned ``Book`` gets an
+        automatically detected cover when one is confidently identified among
+        the first few pages, and no cover otherwise -- the M7.2 precedence is
+        explicit cover, then detected cover, then no cover.
 
     Returns
     -------
@@ -279,7 +289,19 @@ def convert_pdf_to_book(
         )
         metadata = extract_pdf_metadata(doc)
         book = reconstructed_document_to_book(document, metadata)
-        book.cover = resolved_cover
+        # M7.2: an explicit cover always wins; without one, a confidently
+        # detected early page becomes the cover, otherwise the book keeps the
+        # pre-M7.2 "no cover" behavior. The detected page is materialized as
+        # an ordinary Image on Book.cover, so the EPUB cover contract is the
+        # unchanged M4.4 one.
+        cover_selection = select_cover(
+            doc,
+            analysis,
+            results,
+            layout=layout,
+            explicit=resolved_cover,
+        )
+        book.cover = cover_selection.image
         return book
     finally:
         _close_if_owned(source, doc)
