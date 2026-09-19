@@ -6,7 +6,7 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 6 — Quality and Distribution (progressing; M6.1 representative corpus, M6.2 regression harness, M6.3 conversion-quality measurement, and M6.4 performance measurement are complete)
+**Development stage:** Milestone 6 — Quality and Distribution (progressing; M6.1 representative corpus, M6.2 regression harness, M6.3 conversion-quality measurement, M6.4 performance measurement, and M6.5 Windows packaging are complete)
 
 The repository is at the end of **Milestone 5**. Every M5 sub-milestone, M5.1
 through M5.9, is implemented and complete:
@@ -54,9 +54,10 @@ deterministic test suite.
 The core library never imports PySide6, and the UI talks to the core only
 through the M5.1 application API. **Milestone 6** (quality and distribution)
 is underway: the M6.1 representative test corpus, the M6.2 deterministic
-regression harness, the M6.3 conversion-quality measurement suite, and the
-M6.4 performance measurement framework are complete (see the sections below);
-Windows packaging and release preparation remain.
+regression harness, the M6.3 conversion-quality measurement suite, the M6.4
+performance measurement framework, and the M6.5 Windows packaging + clean-machine
+verification are complete (see the sections below); release preparation
+remains.
 
 ## Goals
 
@@ -458,6 +459,58 @@ it can be changed with `--tolerance`. Environment metadata (Python, platform,
 PyMuPDF, and ebooklib versions) is recorded for interpretation. Optional
 Tesseract is not needed, and no targeted production optimization was justified
 by this measurement because M6.4 does not make speculative changes.
+
+### Windows packaging (M6.5)
+
+M6.5 produces a reproducible Windows artifact and verifies it on a "clean
+machine" (a process that never imports the project's Python packages). The
+results are a single-file, console-free (GUI-subsystem) PyInstaller **onedir**
+bundle in `dist/KindleBookConverter/` plus the build/verification tooling in
+`build_tools/`. See `docs/windows-packaging.md` for the recipe; the
+implementation report is `work report/M6.5_IMPLEMENTATION_REPORT.md`.
+
+Build from the repo root (Python 3.14; creates a project-dedicated venv and
+never touches the developer environment):
+
+```bash
+C:\Python314\python.exe build_tools/build_windows.py
+```
+
+The bundle embeds the real runtime distributions (`PySide6`, `PyMuPDF`,
+`ebooklib`/`lxml`, `Pillow`, `pytesseract`, and `kindle-converter` metadata),
+a Windows version resource carrying the `0.1.0` application version, and the
+exact PyInstaller runtime files. Tesseract and Calibre remain external, as
+they are in a source checkout.
+
+Verification runs the *actual executable* in an isolated copy of the bundle
+from a scratch directory, never the interpreter that built it:
+
+```bash
+C:\Python314\python.exe build_tools/verify_windows_package.py
+```
+
+The verifier checks the artifact shape, GUI subsystem, version resource, the
+12 required runtime components, the absence of development artifacts and dev
+paths, and then drives the windowed executable headlessly (`--sysinfo`,
+`--smoke-check`, and real conversions over the M6.1 fixtures
+`novel_basic.pdf`, `scanned_book.pdf`, and `mixed_text_image.pdf`, plus
+`--azw3` through the installed Calibre). Scanned/mixed documents without a
+`tesseract` executable are expected to fail *gracefully* (exit 0, reported
+`expected`) -- exactly the designed OCR-unavailable behavior of M6.1 -- while
+the text document must convert and validate its EPUB (0 warnings / 0 errors).
+
+Pieces that make this reproducible:
+
+* `build_tools/build_windows.py` -- clean venv, `pip install`, the version
+  info file from `pyproject.toml`, PyInstaller, and provenance stripping
+  (`direct_url.json` / `INSTALLER` removed so no dev absolute path leaks);
+* `build_tools/KindleBookConverter.spec` -- the full freeze graph
+  (windowed entry `windows_entry.py`, `copy_metadata` for every shipped
+  distribution so frozen `importlib.metadata` versions resolve);
+* `kindle_converter/ui/smoke.py` -- the headless subcommand harness that
+  ships inside the artifact;
+* `tests/test_windows_packaging.py` -- 24 tests marked `packaging` covering
+  the pure layout/parsing/dispatch logic offline without PyInstaller.
 
 ### Desktop UI (M5.2–M5.9, the complete desktop workflow)
 
@@ -1278,7 +1331,14 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   `tests/fixtures/performance_baseline.json`, explicit regeneration, and
   tolerance-aware regression comparison; see "Performance measurement (M6.4)"
   above)
-* [ ] Package for Windows
+* [x] Package for Windows (M6.5; reproducible PyInstaller onedir bundle built
+  from a clean project-dedicated venv into `dist/KindleBookConverter` with a
+  single GUI-subsystem executable, Windows version resource, bundled runtime
+  distribution metadata, and provenance stripping; verification runs the real
+  executable in an isolated bundle copy and exercises identity, launch, and
+  real conversions over the M6.1 fixtures, including graceful OCR
+  unavailability and AZW3 through Calibre; see "Windows packaging (M6.5)" and
+  `docs/windows-packaging.md`)
 * [ ] Documentation
 * [ ] Release preparation
 

@@ -87,7 +87,10 @@ mixed pages, OCR requirement). No conversion happens yet; conversion execution
 is deferred to later M5 milestones.
 """
 
+from ._meta import application_version
 from .pipeline import convert_pdf_to_book, convert_pdf_to_epub
 
 __all__ = ["convert_pdf_to_book", "convert_pdf_to_epub"]
-__version__ = "0.1.0"
+#: Resolved from the installed distribution metadata (source of truth:
+#: ``pyproject.toml``) with a non-empty fallback for bare source checkouts.
+__version__ = application_version()

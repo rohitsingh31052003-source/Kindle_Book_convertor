@@ -69,4 +69,6 @@ markers = [
     "quality: corpus-driven conversion-quality measurement tests (M6.3)",
     # M6.4 performance measurement framework tests.
     "performance: performance measurement framework tests (M6.4)",
+    # M6.5 Windows packaging configuration tests (pure logic, no artifact).
+    "packaging: Windows packaging build/verification configuration tests (M6.5)",
 ]
