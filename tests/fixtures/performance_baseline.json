@@ -1,0 +1,706 @@
+{
+  "schema_version": 1,
+  "benchmark": "m64-performance",
+  "description": "Reference measurements for the M6.1 corpus. Values are machine-dependent observations, not behavioral contracts.",
+  "protocol": {
+    "warmups": 1,
+    "measured_runs": 3,
+    "aggregation": "median, with minimum and maximum retained",
+    "timer": "time.perf_counter",
+    "fresh_state_per_run": true,
+    "ocr": "tests.regression.harness.CountingOCR (deterministic double)",
+    "memory": "tracemalloc peak Python allocations; not process RSS",
+    "relative_tolerance": 0.25
+  },
+  "environment": {
+    "python": "3.14.2",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64",
+    "pymupdf": "1.27.2.3",
+    "ebooklib": "0.20"
+  },
+  "documents": {
+    "novel_basic": {
+      "fixture": "novel_basic",
+      "page_count": 6,
+      "classification": "TEXT",
+      "operation": "pdf_to_epub",
+      "elapsed": {
+        "samples_seconds": [
+          0.066574,
+          0.111189,
+          0.071771
+        ],
+        "median_seconds": 0.071771,
+        "minimum_seconds": 0.066574,
+        "maximum_seconds": 0.111189
+      },
+      "phases": {
+        "pdf_analysis": {
+          "samples_seconds": [
+            0.017734,
+            0.021893,
+            0.019331
+          ],
+          "median_seconds": 0.019331,
+          "minimum_seconds": 0.017734,
+          "maximum_seconds": 0.021893
+        },
+        "book_conversion": {
+          "samples_seconds": [
+            0.036224,
+            0.059162,
+            0.041287
+          ],
+          "median_seconds": 0.041287,
+          "minimum_seconds": 0.036224,
+          "maximum_seconds": 0.059162
+        },
+        "epub_generation": {
+          "samples_seconds": [
+            0.006504,
+            0.006923,
+            0.005102
+          ],
+          "median_seconds": 0.006504,
+          "minimum_seconds": 0.005102,
+          "maximum_seconds": 0.006923
+        },
+        "epub_validation": {
+          "samples_seconds": [
+            0.004519,
+            0.021915,
+            0.004736
+          ],
+          "median_seconds": 0.004736,
+          "minimum_seconds": 0.004519,
+          "maximum_seconds": 0.021915
+        }
+      },
+      "memory": {
+        "metric": "python_tracemalloc_peak_bytes",
+        "peak_bytes": 585495
+      }
+    },
+    "textbook_dense": {
+      "fixture": "textbook_dense",
+      "page_count": 6,
+      "classification": "TEXT",
+      "operation": "pdf_to_epub",
+      "elapsed": {
+        "samples_seconds": [
+          0.109363,
+          0.154697,
+          0.088219
+        ],
+        "median_seconds": 0.109363,
+        "minimum_seconds": 0.088219,
+        "maximum_seconds": 0.154697
+      },
+      "phases": {
+        "pdf_analysis": {
+          "samples_seconds": [
+            0.026077,
+            0.029968,
+            0.025223
+          ],
+          "median_seconds": 0.026077,
+          "minimum_seconds": 0.025223,
+          "maximum_seconds": 0.029968
+        },
+        "book_conversion": {
+          "samples_seconds": [
+            0.071401,
+            0.112996,
+            0.052208
+          ],
+          "median_seconds": 0.071401,
+          "minimum_seconds": 0.052208,
+          "maximum_seconds": 0.112996
+        },
+        "epub_generation": {
+          "samples_seconds": [
+            0.006293,
+            0.005999,
+            0.005243
+          ],
+          "median_seconds": 0.005999,
+          "minimum_seconds": 0.005243,
+          "maximum_seconds": 0.006293
+        },
+        "epub_validation": {
+          "samples_seconds": [
+            0.004401,
+            0.004255,
+            0.00437
+          ],
+          "median_seconds": 0.00437,
+          "minimum_seconds": 0.004255,
+          "maximum_seconds": 0.004401
+        }
+      },
+      "memory": {
+        "metric": "python_tracemalloc_peak_bytes",
+        "peak_bytes": 599762
+      }
+    },
+    "twocolumn_article": {
+      "fixture": "twocolumn_article",
+      "page_count": 3,
+      "classification": "TEXT",
+      "operation": "pdf_to_epub",
+      "elapsed": {
+        "samples_seconds": [
+          0.047947,
+          0.045412,
+          0.049057
+        ],
+        "median_seconds": 0.047947,
+        "minimum_seconds": 0.045412,
+        "maximum_seconds": 0.049057
+      },
+      "phases": {
+        "pdf_analysis": {
+          "samples_seconds": [
+            0.010539,
+            0.010754,
+            0.011207
+          ],
+          "median_seconds": 0.010754,
+          "minimum_seconds": 0.010539,
+          "maximum_seconds": 0.011207
+        },
+        "book_conversion": {
+          "samples_seconds": [
+            0.028141,
+            0.025261,
+            0.027873
+          ],
+          "median_seconds": 0.027873,
+          "minimum_seconds": 0.025261,
+          "maximum_seconds": 0.028141
+        },
+        "epub_generation": {
+          "samples_seconds": [
+            0.004321,
+            0.004393,
+            0.00499
+          ],
+          "median_seconds": 0.004393,
+          "minimum_seconds": 0.004321,
+          "maximum_seconds": 0.00499
+        },
+        "epub_validation": {
+          "samples_seconds": [
+            0.003932,
+            0.004043,
+            0.004019
+          ],
+          "median_seconds": 0.004019,
+          "minimum_seconds": 0.003932,
+          "maximum_seconds": 0.004043
+        }
+      },
+      "memory": {
+        "metric": "python_tracemalloc_peak_bytes",
+        "peak_bytes": 577275
+      }
+    },
+    "scanned_book": {
+      "fixture": "scanned_book",
+      "page_count": 5,
+      "classification": "SCANNED",
+      "operation": "pdf_to_epub",
+      "elapsed": {
+        "samples_seconds": [
+          1.138651,
+          1.181029,
+          1.141918
+        ],
+        "median_seconds": 1.141918,
+        "minimum_seconds": 1.138651,
+        "maximum_seconds": 1.181029
+      },
+      "phases": {
+        "pdf_analysis": {
+          "samples_seconds": [
+            0.325078,
+            0.353201,
+            0.32618
+          ],
+          "median_seconds": 0.32618,
+          "minimum_seconds": 0.325078,
+          "maximum_seconds": 0.353201
+        },
+        "book_conversion": {
+          "samples_seconds": [
+            0.783107,
+            0.799955,
+            0.781355
+          ],
+          "median_seconds": 0.783107,
+          "minimum_seconds": 0.781355,
+          "maximum_seconds": 0.799955
+        },
+        "epub_generation": {
+          "samples_seconds": [
+            0.009179,
+            0.011558,
+            0.011897
+          ],
+          "median_seconds": 0.011558,
+          "minimum_seconds": 0.009179,
+          "maximum_seconds": 0.011897
+        },
+        "epub_validation": {
+          "samples_seconds": [
+            0.020225,
+            0.015345,
+            0.021506
+          ],
+          "median_seconds": 0.020225,
+          "minimum_seconds": 0.015345,
+          "maximum_seconds": 0.021506
+        }
+      },
+      "memory": {
+        "metric": "python_tracemalloc_peak_bytes",
+        "peak_bytes": 1290186
+      }
+    },
+    "text_with_images": {
+      "fixture": "text_with_images",
+      "page_count": 4,
+      "classification": "TEXT",
+      "operation": "pdf_to_epub",
+      "elapsed": {
+        "samples_seconds": [
+          0.061155,
+          0.06385,
+          0.077028
+        ],
+        "median_seconds": 0.06385,
+        "minimum_seconds": 0.061155,
+        "maximum_seconds": 0.077028
+      },
+      "phases": {
+        "pdf_analysis": {
+          "samples_seconds": [
+            0.016222,
+            0.016515,
+            0.017684
+          ],
+          "median_seconds": 0.016515,
+          "minimum_seconds": 0.016222,
+          "maximum_seconds": 0.017684
+        },
+        "book_conversion": {
+          "samples_seconds": [
+            0.034664,
+            0.036546,
+            0.048213
+          ],
+          "median_seconds": 0.036546,
+          "minimum_seconds": 0.034664,
+          "maximum_seconds": 0.048213
+        },
+        "epub_generation": {
+          "samples_seconds": [
+            0.005407,
+            0.005371,
+            0.005762
+          ],
+          "median_seconds": 0.005407,
+          "minimum_seconds": 0.005371,
+          "maximum_seconds": 0.005762
+        },
+        "epub_validation": {
+          "samples_seconds": [
+            0.003888,
+            0.004465,
+            0.004361
+          ],
+          "median_seconds": 0.004361,
+          "minimum_seconds": 0.003888,
+          "maximum_seconds": 0.004465
+        }
+      },
+      "memory": {
+        "metric": "python_tracemalloc_peak_bytes",
+        "peak_bytes": 601185
+      }
+    },
+    "headers_footers": {
+      "fixture": "headers_footers",
+      "page_count": 6,
+      "classification": "TEXT",
+      "operation": "pdf_to_epub",
+      "elapsed": {
+        "samples_seconds": [
+          0.084456,
+          0.079625,
+          0.090479
+        ],
+        "median_seconds": 0.084456,
+        "minimum_seconds": 0.079625,
+        "maximum_seconds": 0.090479
+      },
+      "phases": {
+        "pdf_analysis": {
+          "samples_seconds": [
+            0.023665,
+            0.020507,
+            0.023686
+          ],
+          "median_seconds": 0.023665,
+          "minimum_seconds": 0.020507,
+          "maximum_seconds": 0.023686
+        },
+        "book_conversion": {
+          "samples_seconds": [
+            0.050628,
+            0.048949,
+            0.055515
+          ],
+          "median_seconds": 0.050628,
+          "minimum_seconds": 0.048949,
+          "maximum_seconds": 0.055515
+        },
+        "epub_generation": {
+          "samples_seconds": [
+            0.005285,
+            0.004808,
+            0.006211
+          ],
+          "median_seconds": 0.005285,
+          "minimum_seconds": 0.004808,
+          "maximum_seconds": 0.006211
+        },
+        "epub_validation": {
+          "samples_seconds": [
+            0.003819,
+            0.004156,
+            0.003812
+          ],
+          "median_seconds": 0.003819,
+          "minimum_seconds": 0.003812,
+          "maximum_seconds": 0.004156
+        }
+      },
+      "memory": {
+        "metric": "python_tracemalloc_peak_bytes",
+        "peak_bytes": 587094
+      }
+    },
+    "unusual_typography": {
+      "fixture": "unusual_typography",
+      "page_count": 4,
+      "classification": "TEXT",
+      "operation": "pdf_to_epub",
+      "elapsed": {
+        "samples_seconds": [
+          0.049199,
+          0.055437,
+          0.047139
+        ],
+        "median_seconds": 0.049199,
+        "minimum_seconds": 0.047139,
+        "maximum_seconds": 0.055437
+      },
+      "phases": {
+        "pdf_analysis": {
+          "samples_seconds": [
+            0.015147,
+            0.015869,
+            0.013852
+          ],
+          "median_seconds": 0.015147,
+          "minimum_seconds": 0.013852,
+          "maximum_seconds": 0.015869
+        },
+        "book_conversion": {
+          "samples_seconds": [
+            0.023828,
+            0.029462,
+            0.023693
+          ],
+          "median_seconds": 0.023828,
+          "minimum_seconds": 0.023693,
+          "maximum_seconds": 0.029462
+        },
+        "epub_generation": {
+          "samples_seconds": [
+            0.005713,
+            0.005234,
+            0.005266
+          ],
+          "median_seconds": 0.005266,
+          "minimum_seconds": 0.005234,
+          "maximum_seconds": 0.005713
+        },
+        "epub_validation": {
+          "samples_seconds": [
+            0.00344,
+            0.003811,
+            0.003359
+          ],
+          "median_seconds": 0.00344,
+          "minimum_seconds": 0.003359,
+          "maximum_seconds": 0.003811
+        }
+      },
+      "memory": {
+        "metric": "python_tracemalloc_peak_bytes",
+        "peak_bytes": 571372
+      }
+    },
+    "mixed_text_image": {
+      "fixture": "mixed_text_image",
+      "page_count": 8,
+      "classification": "MIXED",
+      "operation": "pdf_to_epub",
+      "elapsed": {
+        "samples_seconds": [
+          0.701263,
+          0.825,
+          0.843704
+        ],
+        "median_seconds": 0.825,
+        "minimum_seconds": 0.701263,
+        "maximum_seconds": 0.843704
+      },
+      "phases": {
+        "pdf_analysis": {
+          "samples_seconds": [
+            0.197261,
+            0.193691,
+            0.206709
+          ],
+          "median_seconds": 0.197261,
+          "minimum_seconds": 0.193691,
+          "maximum_seconds": 0.206709
+        },
+        "book_conversion": {
+          "samples_seconds": [
+            0.481976,
+            0.606291,
+            0.586102
+          ],
+          "median_seconds": 0.586102,
+          "minimum_seconds": 0.481976,
+          "maximum_seconds": 0.606291
+        },
+        "epub_generation": {
+          "samples_seconds": [
+            0.006451,
+            0.006727,
+            0.012477
+          ],
+          "median_seconds": 0.006727,
+          "minimum_seconds": 0.006451,
+          "maximum_seconds": 0.012477
+        },
+        "epub_validation": {
+          "samples_seconds": [
+            0.014535,
+            0.017148,
+            0.036867
+          ],
+          "median_seconds": 0.017148,
+          "minimum_seconds": 0.014535,
+          "maximum_seconds": 0.036867
+        }
+      },
+      "memory": {
+        "metric": "python_tracemalloc_peak_bytes",
+        "peak_bytes": 687587
+      }
+    },
+    "chapters_long": {
+      "fixture": "chapters_long",
+      "page_count": 8,
+      "classification": "TEXT",
+      "operation": "pdf_to_epub",
+      "elapsed": {
+        "samples_seconds": [
+          0.076168,
+          0.072008,
+          0.078184
+        ],
+        "median_seconds": 0.076168,
+        "minimum_seconds": 0.072008,
+        "maximum_seconds": 0.078184
+      },
+      "phases": {
+        "pdf_analysis": {
+          "samples_seconds": [
+            0.024402,
+            0.018465,
+            0.021908
+          ],
+          "median_seconds": 0.021908,
+          "minimum_seconds": 0.018465,
+          "maximum_seconds": 0.024402
+        },
+        "book_conversion": {
+          "samples_seconds": [
+            0.04154,
+            0.043507,
+            0.046939
+          ],
+          "median_seconds": 0.043507,
+          "minimum_seconds": 0.04154,
+          "maximum_seconds": 0.046939
+        },
+        "epub_generation": {
+          "samples_seconds": [
+            0.005622,
+            0.005362,
+            0.004785
+          ],
+          "median_seconds": 0.005362,
+          "minimum_seconds": 0.004785,
+          "maximum_seconds": 0.005622
+        },
+        "epub_validation": {
+          "samples_seconds": [
+            0.003614,
+            0.0036,
+            0.003627
+          ],
+          "median_seconds": 0.003614,
+          "minimum_seconds": 0.0036,
+          "maximum_seconds": 0.003627
+        }
+      },
+      "memory": {
+        "metric": "python_tracemalloc_peak_bytes",
+        "peak_bytes": 586458
+      }
+    },
+    "edge_interleaved_blank": {
+      "fixture": "edge_interleaved_blank",
+      "page_count": 4,
+      "classification": "MIXED",
+      "operation": "pdf_to_epub",
+      "elapsed": {
+        "samples_seconds": [
+          0.036765,
+          0.041613,
+          0.043916
+        ],
+        "median_seconds": 0.041613,
+        "minimum_seconds": 0.036765,
+        "maximum_seconds": 0.043916
+      },
+      "phases": {
+        "pdf_analysis": {
+          "samples_seconds": [
+            0.005501,
+            0.005682,
+            0.006865
+          ],
+          "median_seconds": 0.005682,
+          "minimum_seconds": 0.005501,
+          "maximum_seconds": 0.006865
+        },
+        "book_conversion": {
+          "samples_seconds": [
+            0.022093,
+            0.026229,
+            0.026989
+          ],
+          "median_seconds": 0.026229,
+          "minimum_seconds": 0.022093,
+          "maximum_seconds": 0.026989
+        },
+        "epub_generation": {
+          "samples_seconds": [
+            0.004775,
+            0.004698,
+            0.00526
+          ],
+          "median_seconds": 0.004775,
+          "minimum_seconds": 0.004698,
+          "maximum_seconds": 0.00526
+        },
+        "epub_validation": {
+          "samples_seconds": [
+            0.003443,
+            0.003961,
+            0.003636
+          ],
+          "median_seconds": 0.003636,
+          "minimum_seconds": 0.003443,
+          "maximum_seconds": 0.003961
+        }
+      },
+      "memory": {
+        "metric": "python_tracemalloc_peak_bytes",
+        "peak_bytes": 561373
+      }
+    },
+    "edge_short_report": {
+      "fixture": "edge_short_report",
+      "page_count": 2,
+      "classification": "TEXT",
+      "operation": "pdf_to_epub",
+      "elapsed": {
+        "samples_seconds": [
+          0.0232,
+          0.024071,
+          0.0237
+        ],
+        "median_seconds": 0.0237,
+        "minimum_seconds": 0.0232,
+        "maximum_seconds": 0.024071
+      },
+      "phases": {
+        "pdf_analysis": {
+          "samples_seconds": [
+            0.005332,
+            0.005225,
+            0.005341
+          ],
+          "median_seconds": 0.005332,
+          "minimum_seconds": 0.005225,
+          "maximum_seconds": 0.005341
+        },
+        "book_conversion": {
+          "samples_seconds": [
+            0.009013,
+            0.00937,
+            0.00926
+          ],
+          "median_seconds": 0.00926,
+          "minimum_seconds": 0.009013,
+          "maximum_seconds": 0.00937
+        },
+        "epub_generation": {
+          "samples_seconds": [
+            0.004585,
+            0.005166,
+            0.004547
+          ],
+          "median_seconds": 0.004585,
+          "minimum_seconds": 0.004547,
+          "maximum_seconds": 0.005166
+        },
+        "epub_validation": {
+          "samples_seconds": [
+            0.003289,
+            0.00345,
+            0.003647
+          ],
+          "median_seconds": 0.00345,
+          "minimum_seconds": 0.003289,
+          "maximum_seconds": 0.003647
+        }
+      },
+      "memory": {
+        "metric": "python_tracemalloc_peak_bytes",
+        "peak_bytes": 563400
+      }
+    }
+  }
+}

@@ -6,7 +6,7 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 6 — Quality and Distribution (progressing; M6.1 representative corpus, M6.2 regression harness, and M6.3 conversion-quality measurement are complete)
+**Development stage:** Milestone 6 — Quality and Distribution (progressing; M6.1 representative corpus, M6.2 regression harness, M6.3 conversion-quality measurement, and M6.4 performance measurement are complete)
 
 The repository is at the end of **Milestone 5**. Every M5 sub-milestone, M5.1
 through M5.9, is implemented and complete:
@@ -54,9 +54,9 @@ deterministic test suite.
 The core library never imports PySide6, and the UI talks to the core only
 through the M5.1 application API. **Milestone 6** (quality and distribution)
 is underway: the M6.1 representative test corpus, the M6.2 deterministic
-regression harness, and the M6.3 conversion-quality measurement suite are
-complete (see the sections below); performance measurement, Windows packaging,
-and release preparation remain.
+regression harness, the M6.3 conversion-quality measurement suite, and the
+M6.4 performance measurement framework are complete (see the sections below);
+Windows packaging and release preparation remain.
 
 ## Goals
 
@@ -426,6 +426,38 @@ honest limitations (recorded as per-fixture `notes`, not hidden):
   "On the Behavior of Light" are treated as body text while explicit
   `Chapter N:` headings are surfaced. Expectations document this behavior
   rather than weakening the detection thresholds.
+
+### Performance measurement (M6.4)
+
+`tests/performance` measures the real PDF -> Book -> EPUB pipeline over all
+11 M6.1 fixtures. It uses one warm-up and three measured runs by default,
+`time.perf_counter`, median/minimum/maximum timing statistics, and a fresh
+temporary output state for every run. Scanned and mixed fixtures use the
+deterministic `tests.regression.harness.CountingOCR` double, so the default
+benchmark never requires Tesseract; its timings are OCR-routing timings, not
+real Tesseract timings.
+
+The benchmark records end-to-end elapsed time, observable phase timings
+(`pdf_analysis`, `book_conversion`, `epub_generation`, and
+`epub_validation`), fixture metadata, and peak Python allocations from
+`tracemalloc`. The memory value is not process RSS or total system memory.
+No aggregate performance score is calculated.
+
+Run a measurement preview and explicitly regenerate the separate baseline:
+
+```bash
+PYTHONPATH=src python -m tests.performance.regenerate_baseline
+PYTHONPATH=src python -m tests.performance.regenerate_baseline --write
+```
+
+The baseline is `tests/fixtures/performance_baseline.json`; ordinary tests
+never overwrite it. Baseline comparisons retain baseline, observed, delta,
+threshold, and status for elapsed and phase medians. The default relative
+tolerance is 25% to avoid treating normal local timing noise as a regression;
+it can be changed with `--tolerance`. Environment metadata (Python, platform,
+PyMuPDF, and ebooklib versions) is recorded for interpretation. Optional
+Tesseract is not needed, and no targeted production optimization was justified
+by this measurement because M6.4 does not make speculative changes.
 
 ### Desktop UI (M5.2–M5.9, the complete desktop workflow)
 
@@ -1241,7 +1273,11 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   against fresh measurements, and rendering human/machine reports; regeneration
   is explicit via `python -m tests.quality.regenerate_baseline`; see
   "Conversion quality measurement (M6.3)" below)
-* [ ] Improve performance
+* [x] Measure performance (M6.4; reproducible corpus benchmarks under
+  `tests/performance`, phase timing, Python allocation peaks, a separate
+  `tests/fixtures/performance_baseline.json`, explicit regeneration, and
+  tolerance-aware regression comparison; see "Performance measurement (M6.4)"
+  above)
 * [ ] Package for Windows
 * [ ] Documentation
 * [ ] Release preparation

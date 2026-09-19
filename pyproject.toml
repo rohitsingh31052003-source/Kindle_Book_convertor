@@ -67,4 +67,6 @@ markers = [
     # M6.3 conversion-quality measurement suite. Runs as part of the normal
     # suite; `pytest -m quality` selects only it.
     "quality: corpus-driven conversion-quality measurement tests (M6.3)",
+    # M6.4 performance measurement framework tests.
+    "performance: performance measurement framework tests (M6.4)",
 ]
