@@ -1,8 +1,13 @@
-# Windows packaging (M6.5)
+# Windows packaging (M6.5, release documentation M6.6)
 
 This guide describes how the Kindle Book Converter produces its Windows
 artifact and how that artifact is verified in an environment that never
 imports the project's Python packages (the "clean-machine" check of M6.5).
+
+It is the authoritative packaging reference for the release process: the
+[release checklist](release-checklist.md) and the release-readiness tool
+(`build_tools/release_check.py`) refer to this document and to the M6.5
+build/verify commands below, not to any other recipe.
 
 The goal of the milestone was not just "make an `.exe`". It was to:
 
@@ -35,6 +40,37 @@ Everything below was executed on Windows with Python 3.14.2 and PyInstaller
   the pure layout/parsing/dispatch logic offline, with no PyInstaller run.
 * `dist/KindleBookConverter/` -- the resulting onedir bundle
   (`KindleBookConverter.exe` + `_internal/`).
+
+## Prerequisites
+
+* A Windows machine with **Python 3.12+** available and, for a reproducible
+  reference build, Python 3.14 (the M6.5 build and verification runs used
+  3.14.2 and PyInstaller 6.22.3).
+* Network access during the **build only**, so a fresh `pip install` can fetch
+  the declared dependencies into the project-dedicated build venv. Verification
+  needs no network.
+* Optional at build time, required for the corresponding smoke checks:
+  Tesseract (scanned/mixed OCR) and Calibre (AZW3).
+
+## Version handling
+
+`pyproject.toml` (`[project] version`) is the **single authoritative version
+source**. It flows into every versioned surface:
+
+* the installed distribution metadata (and therefore
+  `kindle_converter.__version__` / `_meta.application_version()`);
+* the Windows version resource embedded in `KindleBookConverter.exe`
+  (`build_tools/common.py` generates `build/version_info.txt` from the
+  pyproject version; the file version is `major, minor, patch, 0`);
+* the frozen `--sysinfo` output and the release documentation
+  (`CHANGELOG.md` head entry).
+
+`tests/test_windows_packaging.py` (class `TestVersionSingleSourcing`) and
+`tests/test_release_docs.py` keep these consumers in sync with
+`pyproject.toml`, so bumping the version without updating the package,
+metadata, changelog, or documentation fails the suite. To release a new
+version, edit `pyproject.toml`, add a `CHANGELOG.md` entry, and let the
+checks confirm consistency.
 
 ## Build
 
@@ -70,6 +106,33 @@ The spec makes the freeze deterministic and honest:
   bootloader detaches stdout, so the verification subcommands write
   machine-readable reports to `--report <path>` and the process exit code is
   the primary signal.
+
+## Packaged application structure
+
+The produced artifact is a PyInstaller **onedir** bundle:
+
+```text
+dist/KindleBookConverter/
+├── KindleBookConverter.exe   <-- the single GUI-subsystem executable
+└── _internal/                <-- runtime tree (DLLs, PyInstaller PYZ, plugins,
+                                  bundled *.dist-info metadata, resources)
+```
+
+Key structural facts:
+
+* `KindleBookConverter.exe` is a **windowed (GUI subsystem)** executable; it
+  has no console, accepts no stdin, and detaches stdout. Machine-readable
+  diagnostics therefore go to `--report <path>` files and the process exit
+  code is the primary signal.
+* Pure-python distributions (`kindle_converter`, `ebooklib`, `pytesseract`)
+  live inside the PyInstaller PYZ archive, not as loose directories. Their
+  frozen presence is proven by the bundled `*.dist-info` metadata
+  (`copy_metadata` ships all seven distributions).
+* The `tesseract` executable and Calibre's `ebook-convert` are **not** in the
+  bundle; they are discovered on `PATH` at runtime, exactly as in a source
+  checkout (see below).
+* Provenance metadata (`direct_url.json`, `INSTALLER`) is stripped from every
+  bundled `*.dist-info`, so no development absolute path ships in the output.
 
 ## The smoke harness (`--smoke`, `--smoke-check`, `--sysinfo`)
 
@@ -125,6 +188,80 @@ The developer-oriented non-PyInstaller unit tests are:
 ```bash
 PYTHONPATH=src venv\Scripts\python.exe -m pytest tests/test_windows_packaging.py -m packaging
 ```
+
+## Verification levels
+
+The release process distinguishes three levels of verification, and does
+**not** claim a level that was not performed:
+
+1. **Automated package verification** (always runnable in this repository):
+   `build_tools/verify_windows_package.py` checks the artifact shape, GUI
+   subsystem, version resource, runtime components, absence of dev artifacts
+   and dev paths, and then drives the real executable through the
+   `--sysinfo`/`--smoke`/`--smoke-check` subcommands. It is deterministic and
+   offline for the static checks; the isolated smoke runs need the M6.1 corpus
+   fixtures (committed) and optional Tesseract/Calibre for the OCR/AZW3 paths.
+2. **Isolated local verification**: the verifier copies the bundle into
+   `build/verification_work/bundle` and runs the artifact with `PYTHONPATH` /
+   `PYTHONHOME` cleared and QPA forced offscreen. The frozen executable then
+   runs with no access to the developer environment, the source tree, or the
+   interpreter that built it. This is a strong isolation check, but it still
+   runs on the **same machine** that built the artifact.
+3. **Actual clean-machine verification**: running the artifact on a separate
+   physical/virtual machine with a clean operating system and no development
+   checkout. **This repository does not currently claim a clean-machine test
+   on a separate physical machine.** The M6.5 "clean-machine" exercise is the
+   isolated-bundle-copy procedure in (2). If an external clean environment is
+   available, run the verifier's same recipe there (copy
+   `dist/KindleBookConverter`, run `--sysinfo`/`--smoke-check`/`--smoke` on
+   the M6.1 fixtures) before distribution.
+
+## Optional external tools in verification
+
+* **Tesseract (OCR).** Tesseract is **external** (never bundled). The expected
+  behavior when it is absent is *graceful OCR unavailability*: a scanned/mixed
+  conversion reports `expected: true` with exit 0, and the text-document smoke
+  still converts and validates. When Tesseract **is** present, the same smoke
+  should *succeed*; the verifier records that outcome honestly either way.
+* **Calibre (AZW3).** Calibre is **external**. The `smoke_azw3` check produces
+  EPUB + AZW3 when `ebook-convert` is present; when it is absent the check is
+  reported as skipped, not as success, so a release machine without Calibre is
+  clearly distinguished from one that exercised the AZW3 path.
+
+## Expected artifact checks before distribution
+
+Before distributing a release artifact, the release checklist
+([release-checklist.md](release-checklist.md)) requires that the built bundle:
+
+* exists at `dist/KindleBookConverter/` with `KindleBookConverter.exe`;
+* is a GUI-subsystem image whose version resource matches the `pyproject.toml`
+  version;
+* ships all 12 required runtime components and **no** development artifacts or
+  repository path text;
+* reports the correct frozen identity (`--sysinfo` version, all five dependency
+  versions resolved);
+* launches headless (`--smoke-check`);
+* converts and validates the TEXT `novel_basic` fixture (0 warnings / 0 errors);
+* handles scanned/mixed fixtures gracefully without Tesseract and converts them
+  where the environment provides OCR;
+* produces AZW3 via the external Calibre when it is available.
+
+`build_tools/release_check.py --package` runs the M6.5 verifier against the
+existing artifact and reports pass/fail per check.
+
+## Troubleshooting common packaging failures
+
+| Symptom | Cause / fix |
+| --- | --- |
+| Build fails early on `pip install` | No network, or a dependency resolution conflict in the fresh build venv. The build venv is recreated by default (`--keep-venv` reuses it); a stale venv can hold incompatible versions — delete `build/windows_build_venv` and rebuild. |
+| Frozen exe crashes with an import error at startup | The entry script must be plain and absolute-imported (`build_tools/windows_entry.py`). The frozen runtime cannot reproduce `python -m` relative-import semantics — do not point the spec at `ui/__main__.py`. |
+| The exe cannot be launched by the verifier (`ERROR_ACCESS_DENIED`, Win32 5) | Antivirus real-time scanning of a freshly copied bundle. `run_app` retries process creation automatically; if it persists, exclude the work directory from real-time scanning. Also confirm the verifier is handed the `.exe` path, not the bundle folder path. |
+| `--sysinfo`/`--smoke` produce no stdout | Expected: the windowed bootloader detaches stdout. Always pass `--report <path>` and read the report file / exit code. |
+| `version_resource` check fails | `pyi-grab_version` writes `file_version_info.txt` into its *current working directory*, not stdout; the verifier runs it in a scratch directory. If the version is genuinely wrong, edit `pyproject.toml` (the single source) and rebuild. |
+| `runtime_components` check fails | A bundled distribution is missing or its `*.dist-info` was not copied. The spec `copy_metadata` list must cover all seven distributions; pure-python packages are proven by `*.dist-info`, not loose directories. |
+| `no_dev_paths` check fails | A development absolute path leaked into the bundle (e.g. build ran against a checkout whose path was embedded). Remove `build/dist`, rebuild, and confirm provenance stripping (`direct_url.json`, `INSTALLER`) reports the removed files. |
+| `smoke_scanned_book` / `smoke_mixed_text_image` reported as fail | The scanned/mixed smoke must be **graceful** (exit 0, `expected: true`) when Tesseract is absent, and a real conversion when it is present. A non-zero exit or a report without `expected` indicates a genuine crash — inspect the smoke report JSON in `build/verification_work/`. |
+| `smoke_azw3` reported as skip | Calibre's `ebook-convert` is not on `PATH`. Install Calibre and re-run the verifier to exercise the real AZW3 path; a skip is not a pass. |
 
 ## Notes and pitfalls
 

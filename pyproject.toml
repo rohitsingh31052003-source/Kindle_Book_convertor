@@ -71,4 +71,6 @@ markers = [
     "performance: performance measurement framework tests (M6.4)",
     # M6.5 Windows packaging configuration tests (pure logic, no artifact).
     "packaging: Windows packaging build/verification configuration tests (M6.5)",
+    # M6.6 release documentation/readiness checks (offline, deterministic).
+    "docs: release documentation and release-readiness validation tests (M6.6)",
 ]

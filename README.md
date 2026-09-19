@@ -6,7 +6,13 @@ The project is being developed as a local-first conversion engine that can handl
 
 ## Project Status
 
-**Development stage:** Milestone 6 — Quality and Distribution (progressing; M6.1 representative corpus, M6.2 regression harness, M6.3 conversion-quality measurement, M6.4 performance measurement, and M6.5 Windows packaging are complete)
+**Development stage:** complete. **Milestone 6 (Quality and Distribution)
+is finished**: the M6.1 representative corpus, M6.2 regression harness, M6.3
+conversion-quality measurement, M6.4 performance measurement, M6.5 Windows
+packaging, and M6.6 documentation + release engineering milestones are all
+implemented. The repository is at an initial **0.1.0** release state; see the
+[CHANGELOG](CHANGELOG.md), the [release checklist](docs/release-checklist.md),
+and the "Known limitations" section below.
 
 The repository is at the end of **Milestone 5**. Every M5 sub-milestone, M5.1
 through M5.9, is implemented and complete:
@@ -53,11 +59,34 @@ deterministic test suite.
 
 The core library never imports PySide6, and the UI talks to the core only
 through the M5.1 application API. **Milestone 6** (quality and distribution)
-is underway: the M6.1 representative test corpus, the M6.2 deterministic
+is complete: the M6.1 representative test corpus, the M6.2 deterministic
 regression harness, the M6.3 conversion-quality measurement suite, the M6.4
-performance measurement framework, and the M6.5 Windows packaging + clean-machine
-verification are complete (see the sections below); release preparation
-remains.
+performance measurement framework, the M6.5 Windows packaging + clean-machine
+verification, and the M6.6 documentation + release engineering work (this
+README, the user/developer/release documentation, a changelog, a release
+checklist, release validation, and single-source versioning) are all done (see
+the sections below).
+
+## Documentation
+
+* [User guide](docs/user-guide.md) — what the application does, supported
+  PDFs, using the Windows app, OCR / AZW3 dependencies, troubleshooting.
+* [Development guide](docs/development.md) — environment setup, project
+  structure, architecture, running the tests.
+* [Windows packaging](docs/windows-packaging.md) — build and verify the
+  Windows artifact (M6.5) and the verification levels.
+* [Release checklist](docs/release-checklist.md) — the required and
+  optional/environment-dependent release gates.
+* [CHANGELOG](CHANGELOG.md) — release notes for **0.1.0**.
+
+## Supported platforms
+
+The library core is platform-neutral Python. The production **graphical
+workflow and the release artifact are Windows**: the PySide6 desktop
+application is the supported user interface, and the release artifact is the
+packaged Windows bundle built by M6.5. All suites (unit/integration, M6.2
+regression, M6.3 quality, M6.4 performance, M6.5 packaging, M6.6 docs) run on
+Windows with Python 3.14; the converter tested against Python 3.12+.
 
 ## Goals
 
@@ -511,6 +540,43 @@ Pieces that make this reproducible:
   ships inside the artifact;
 * `tests/test_windows_packaging.py` -- 24 tests marked `packaging` covering
   the pure layout/parsing/dispatch logic offline without PyInstaller.
+
+### Release preparation (M6.6)
+
+M6.6 turns the repository into a release-ready project: user documentation
+([docs/user-guide.md](docs/user-guide.md)), developer documentation
+([docs/development.md](docs/development.md)), packaging/release documentation
+([docs/windows-packaging.md](docs/windows-packaging.md)), a release checklist
+([docs/release-checklist.md](docs/release-checklist.md)), a changelog
+([CHANGELOG.md](CHANGELOG.md)), single-source version validation, and a
+lightweight release validator (`build_tools/release_check.py`) that reuses the
+M6.5 package verifier rather than duplicating it:
+
+```bash
+venv\Scripts\python.exe build_tools/release_check.py          # repository gates
+venv\Scripts\python.exe build_tools/release_check.py --package  # + M6.5 package verifier
+```
+
+The **single authoritative version source remains `pyproject.toml`**
+(`[project] version`): the package metadata, the runtime
+`kindle_converter.__version__`, the Windows executable version resource, and
+the `CHANGELOG.md` head entry are all derived from or validated against it
+(`pytest -m packaging` and `pytest -m docs` are the drift guards).
+
+**Verification levels** (important for release honesty):
+
+1. **automated package verification** — `verify_windows_package.py` (M6.5);
+2. **isolated local verification** — the same verifier runs the frozen
+   executable from an isolated bundle copy in `build/verification_work/` with
+   `PYTHONPATH`/`PYTHONHOME` cleared;
+3. **actual clean-machine verification** — running the artifact on a separate
+   clean machine. **This repository does not claim a separate-machine clean
+   test**; the performed check is (2), which runs the real packaged executable
+   but on the machine that built it.
+
+See the [release checklist](docs/release-checklist.md) for the required vs
+optional/environment-dependent gates and the "Known limitations" subsection
+below for the documented product limitations.
 
 ### Desktop UI (M5.2–M5.9, the complete desktop workflow)
 
@@ -1148,6 +1214,42 @@ pip install build
 python -m build
 ```
 
+## Known limitations
+
+The following are the documented, implemented limitations of the 0.1.0
+converter (also recorded in the [CHANGELOG](CHANGELOG.md)). They are
+*product* limitations surfaced by the M6.3 quality measurement and M6
+development, not claims of missing documentation:
+
+* **EPUB chapter splitting is absent.** The PDF layer detects and indexes
+  chapters (`novel_basic` 3, `chapters_long` 8, `twocolumn_article` 3 TOC
+  entries), but the EPUB always ships a single chapter file with one nav
+  entry (`nav_entries >= 1`). Recorded in the M6.3 quality baseline as
+  follow-up work.
+* **Document titles are not detected as headings.** The M2.4 heading detector
+  is deliberately conservative: explicit `Chapter N:` headings are surfaced,
+  but book titles such as "Minimum Viable Document" are treated as body text.
+* **Reading order on complex layouts is best-effort.** Multi-column behavior is
+  exercised for the two-column case; unusual typography and dense layouts can
+  still reconstruct imperfectly. OCR quality also depends on the source scan,
+  and OCR performs **no recognition correction** (no spelling/dictionary/
+  grammar/character-substitution correction).
+* **AZW3 is a best-effort external conversion.** AZW3 "success" means Calibre's
+  `ebook-convert` exited 0 and produced a non-empty file — not a guarantee of
+  Kindle marketplace acceptance or exact device rendering — and AZW3 output is
+  not byte-for-byte deterministic (Calibre stamps its own metadata).
+* **No fixed-layout / per-device output.** The EPUB is deliberately reflowable
+  and generic: no KFX, no fixed-layout EPUB, no Kindle Previewer automation, no
+  per-model CSS.
+* **No drag-and-drop input and no conversion cancellation.** Input is selected
+  through the file picker; a running conversion finishes rather than being
+  stopped.
+* **No clean-machine verification on a separate machine has been performed.**
+  The strongest performed check is the isolated local run of the frozen
+  artifact (M6.5/M6.6); a true clean-VM check is a documented optional gate.
+* **No telemetry, auto-updates, or cloud services.** The application is
+  local-first by design.
+
 ## Development Principles
 
 ### 1. Build the conversion engine first
@@ -1339,8 +1441,17 @@ Features such as OCR, advanced layout reconstruction, GUI functionality, and Kin
   real conversions over the M6.1 fixtures, including graceful OCR
   unavailability and AZW3 through Calibre; see "Windows packaging (M6.5)" and
   `docs/windows-packaging.md`)
-* [ ] Documentation
-* [ ] Release preparation
+* [x] Documentation (M6.6; final user documentation in
+  `docs/user-guide.md`, developer documentation in `docs/development.md`,
+  release/packaging documentation in `docs/windows-packaging.md`, a release
+  checklist in `docs/release-checklist.md`, and this README finalized as the
+  primary landing page, with documented known limitations)
+* [x] Release preparation (M6.6; single authoritative version source retained
+  in `pyproject.toml` with changelog/docs consistency checks, a release
+  checklist separating required from environment-dependent gates, the initial
+  changelog in `CHANGELOG.md`, and a lightweight release validator
+  `build_tools/release_check.py` reusing the M6.5 package verifier; M6 is
+  complete)
 
 ## Project Philosophy
 

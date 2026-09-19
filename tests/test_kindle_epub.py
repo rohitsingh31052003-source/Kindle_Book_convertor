@@ -204,6 +204,9 @@ def stylesheet(path: Path) -> str:
 
 
 _TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+_TIMESTAMP_BYTES = re.compile(
+    rb"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"
+)
 
 
 def logical_snapshot(path: Path) -> dict[str, object]:
@@ -213,7 +216,8 @@ def logical_snapshot(path: Path) -> dict[str, object]:
     and ZIP entry times), so byte equality across builds cannot be demanded
     of the library. Everything the *builder* controls -- resource names,
     chapter documents, package metadata, stylesheet -- is compared here, with
-    that library timestamp normalized away.
+    that library timestamp normalized away wherever it appears (including the
+    raw ``content.opf`` bytes under ``documents``).
     """
     with read_archive(path) as archive:
         names = sorted(archive.namelist())
@@ -222,6 +226,9 @@ def logical_snapshot(path: Path) -> dict[str, object]:
             for name in names
             if name.endswith((".xhtml", ".css", ".opf"))
         }
+    documents["EPUB/content.opf"] = _TIMESTAMP_BYTES.sub(
+        b"<timestamp>", documents["EPUB/content.opf"]
+    )
     return {
         "names": names,
         "documents": documents,
