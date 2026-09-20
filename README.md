@@ -16,8 +16,9 @@ PDFs can be converted using the optional **Tesseract OCR** engine (see
 [OCR](#ocr)). EPUB output is validated structurally, and AZW3 is generated
 from the EPUB through Calibre (see [AZW3 (optional)](#azw3-optional)).
 
-The project has completed **Milestones 1–7** and is preparing its first public
-**GitHub release** (currently in **Milestone 8**). See the [Roadmap](#roadmap).
+The project has completed **Milestones 1–8**, including its first public
+**GitHub release** (`v0.1.0`, with the Windows distribution ZIP and its
+SHA-256 checksum attached). See the [Roadmap](#roadmap).
 
 ## Features
 
@@ -164,7 +165,9 @@ source installation.
 Packaged Windows builds are distributed for this repository.
 The release bundle is available as a **ZIP archive** (e.g.
 `KindleBookConverter-Windows-x64-0.1.0.zip`) together with its SHA-256
-checksum — see [Windows packaging](docs/windows-packaging.md) for the build
+checksum from the repository's [**Releases** page]
+(https://github.com/rohitsingh31052003-source/Kindle_Book_convertor/releases)
+— see [Windows packaging](docs/windows-packaging.md) for the build
 and verification recipe. Extracting it reproduces the application folder:
 
 ```text
@@ -468,10 +471,11 @@ These are the documented, *implemented* limitations of the current converter:
 
 ## Roadmap
 
-**Milestones 1–7 are complete** (see the checklists below): the conversion
-engine, OCR, Kindle-oriented output, the desktop application, and quality,
-performance, packaging, and release engineering. The current focus is the
-**public GitHub release** of the project (Milestone 8).
+**Milestones 1–8 are complete** (see the checklists below): the conversion
+engine, OCR, Kindle-oriented output, the desktop application, quality,
+performance, packaging, release engineering, and the first **public GitHub
+release** (`v0.1.0`, published with the Windows distribution ZIP and its
+SHA-256 checksum attached).
 
 The previously discussed hosted/web version is **deferred**: this project is
 a local desktop application, and no web hosting, server-side conversion, or
@@ -548,10 +552,10 @@ authentication is planned as current work.
 ### Milestone 8 — Public GitHub Release
 
 * [x] Repository + README public readiness (M8.1; this README and the repository prepared for first-time visitors)
-* [x] Windows distribution artifact + workflow (M8.2; a verified, reproducible Windows ZIP distribution with its build/verification/documentation flow — GitHub Release *publication* of the assets remains future)
+* [x] Windows distribution artifact + workflow (M8.2; a verified, reproducible Windows ZIP distribution with its build/verification/documentation flow)
 * [x] User documentation + user guide (M8.3; complete, accurate, release-ready end-user documentation)
 * [x] Repository quality (M8.4; contribution/security documentation, issue and pull-request templates, generated-artifact hygiene)
-* [ ] GitHub Release publication (attaching the Windows distribution assets to a public GitHub Release — the first public release, part of M8.2+ overall)
+* [x] GitHub Release publication (M8.5; `v0.1.0` published to this public GitHub repository with the Windows distribution ZIP and its SHA-256 checksum attached as release assets)
 * [ ] Future improvements: conversion-quality refinements, additional PDF compatibility, and user-requested improvements
 * [ ] Future hosted/web version (deferred; not current work — scope is undecided)
 
