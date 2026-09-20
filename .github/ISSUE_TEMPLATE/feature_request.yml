@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a feature or improvement for Kindle Book Converter
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: feature
+    attributes:
+      label: Requested feature
+      description: What would you like the converter to do?
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Problem / use case
+      description: What problem does this solve, and when would you use it?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: How should the feature behave from a user's point of view?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Possible alternatives
+      description: Workarounds or alternate designs you considered.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else that would help evaluate the request.

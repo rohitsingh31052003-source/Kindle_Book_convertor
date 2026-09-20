@@ -431,6 +431,9 @@ described in the [development guide](docs/development.md).
 * [Release checklist](docs/release-checklist.md) — the release gates and the
   release process.
 * [CHANGELOG](CHANGELOG.md) — release notes.
+* [Contributing](CONTRIBUTING.md) — how to report bugs, propose features, and
+  open pull requests.
+* [Security policy](SECURITY.md) — how to report a security vulnerability.
 
 ## Limitations
 
@@ -547,18 +550,22 @@ authentication is planned as current work.
 * [x] Repository + README public readiness (M8.1; this README and the repository prepared for first-time visitors)
 * [x] Windows distribution artifact + workflow (M8.2; a verified, reproducible Windows ZIP distribution with its build/verification/documentation flow — GitHub Release *publication* of the assets remains future)
 * [x] User documentation + user guide (M8.3; complete, accurate, release-ready end-user documentation)
+* [x] Repository quality (M8.4; contribution/security documentation, issue and pull-request templates, generated-artifact hygiene)
 * [ ] GitHub Release publication (attaching the Windows distribution assets to a public GitHub Release — the first public release, part of M8.2+ overall)
 * [ ] Future improvements: conversion-quality refinements, additional PDF compatibility, and user-requested improvements
 * [ ] Future hosted/web version (deferred; not current work — scope is undecided)
 
 ## Contributing
 
-Contributions are welcome. Before contributing, please:
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the
+full guide. Before contributing, please:
 
 * **Report bugs and request features through the issue tracker** of this
-  repository. Include the PDF classification (TEXT / SCANNED / MIXED) when
-  relevant, the application version, and whether Tesseract or Calibre was
-  installed.
+  repository, using the [bug report](.github/ISSUE_TEMPLATE/bug_report.yml) and
+  [feature request](.github/ISSUE_TEMPLATE/feature_request.yml) templates.
+  Include the PDF classification (TEXT / SCANNED / MIXED) when relevant, the
+  application version, and whether Tesseract or Calibre was installed. Never
+  attach private PDFs or personal documents to an issue.
 * **Run the test suite** before submitting changes
   (`python -m pytest`, plus the marker suites in [Testing](#testing)).
 * **Preserve existing behavior.** Conversion-algorithm changes are treated as

@@ -1,0 +1,90 @@
+name: Bug report
+description: Report a problem with Kindle Book Converter
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Fill in the fields below.
+        **Privacy:** do **not** upload private PDFs or personal documents. If a
+        reproduction file is needed, use a small non-sensitive placeholder
+        document and describe the layout that fails.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What went wrong, in a sentence or two.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Application version
+      description: e.g. 0.1.0; check CHANGELOG.md or the packaged version resource.
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: e.g. Windows 11 23H2, Windows 10 22H2.
+    validations:
+      required: true
+  - type: dropdown
+    id: pdf-type
+    attributes:
+      label: PDF classification
+      description: Shown by the app after "Analyze PDF" (TEXT / SCANNED / MIXED), if you got that far.
+      options:
+        - TEXT
+        - SCANNED
+        - MIXED
+        - Unknown / analysis failed
+  - type: input
+    id: pdf-characteristics
+    attributes:
+      label: PDF characteristics
+      description: e.g. single-column, scanned pages, image-heavy, unusual typography, how many pages.
+  - type: dropdown
+    id: output-format
+    attributes:
+      label: Output format
+      options:
+        - EPUB
+        - EPUB + AZW3
+        - Both / irrelevant
+  - type: checkboxes
+    id: components
+    attributes:
+      label: Components involved
+      description: Select any that apply.
+      options:
+        - label: OCR (scanned / mixed path)
+        - label: Tesseract (installed and used)
+        - label: Calibre (AZW3 output)
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: The exact steps that trigger the bug, from selecting the PDF onwards.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / error messages
+      description: Paste error text or log output. Remove any local paths or personal information before posting.

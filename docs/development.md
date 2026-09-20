@@ -10,6 +10,8 @@ structure, and work with the packaging tooling.
 | Windows packaging / release artifact | [Windows packaging](windows-packaging.md) |
 | Release process and gates | [Release checklist](release-checklist.md) |
 | Release notes | [CHANGELOG](../CHANGELOG.md) |
+| Contributing | [CONTRIBUTING](../CONTRIBUTING.md) |
+| Security reporting | [SECURITY](../SECURITY.md) |
 
 ## Requirements
 
@@ -92,6 +94,9 @@ tests/
 └── test_*.py              # unit/integration suites (M1–M6.5)
 
 docs/                      # user guide, development guide, packaging, checklist
+.github/                   # issue and pull-request templates (M8.4)
+CONTRIBUTING.md            # contribution guidance (links here for the details)
+SECURITY.md                # security reporting policy
 CHANGELOG.md               # release notes
 ```
 

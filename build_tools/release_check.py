@@ -40,6 +40,8 @@ REQUIRED_FILES: tuple[str, ...] = (
     "pyproject.toml",
     "CHANGELOG.md",
     "requirements.txt",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "docs/user-guide.md",
     "docs/development.md",
     "docs/windows-packaging.md",
@@ -59,6 +61,8 @@ REFERENCED_BY_README: tuple[str, ...] = (
     "docs/windows-packaging.md",
     "docs/release-checklist.md",
     "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
 )
 
 #: Development/release artifact directories that must never be tracked by git.

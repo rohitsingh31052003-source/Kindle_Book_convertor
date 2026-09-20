@@ -39,6 +39,12 @@ ENV/
 htmlcov/
 coverage.xml
 
+# Generated test reports (e.g. pytest --junitxml output)
+_tmp_res.xml
+junit/
+junit-*.xml
+*.junit.xml
+
 # mypy / type checkers
 .mypy_cache/
 .pyre/
@@ -58,6 +64,9 @@ coverage.xml
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local tooling metadata (development machines only)
+.kilo/
 
 # Project runtime artifacts
 *.epub
