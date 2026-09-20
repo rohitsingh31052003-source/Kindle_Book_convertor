@@ -9,7 +9,7 @@ and this project adheres to the versioning established in `pyproject.toml`
 ## [0.1.0] - 2026-09-19
 
 Initial release. This entry documents the capabilities actually implemented
-across Milestones 1–6 of this repository. It describes the converter honestly:
+across Milestones 1–7 of this repository. It describes the converter honestly:
 see **Known limitations** below for what is deliberately not claimed.
 
 ### Added
@@ -65,6 +65,14 @@ see **Known limitations** below for what is deliberately not claimed.
   verified from the M6.5 bundle by `build_tools/package_distribution.py`; the
   archive embeds the versioned bundle under its own folder and is byte-identical
   for a given bundle (see [docs/windows-packaging.md](docs/windows-packaging.md)).
+* **First-page investigation and root-cause fix (M7.1)** — fixed scanned-first-page
+  text duplication and linear EPUB navigation issues, with regression coverage.
+* **Automatic cover selection (M7.2)** — deterministic, conservative, offline
+  cover-page detection: when no explicit cover is given, the converter examines
+  the first few pages and selects a confident cover automatically; an explicit
+  cover always wins.
+* **AZW3 process hardening (M7.3)** — hidden Calibre console window on Windows
+  (`CREATE_NO_WINDOW`), so `ebook-convert` runs silently in the background.
 
 ### Known limitations (implemented behavior, not defects fixed in 0.1.0)
 

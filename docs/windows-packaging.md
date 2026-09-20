@@ -39,7 +39,7 @@ Everything below was executed on Windows with Python 3.14.2 and PyInstaller
   subsystem detection, dev-path scanning, distribution-archive naming).
 * `kindle_converter/ui/smoke.py` -- the headless smoke harness that ships
   *inside* the packaged application.
-* `tests/test_windows_packaging.py` -- 24 tests (marker `packaging`) covering
+* `tests/test_windows_packaging.py` + `tests/test_windows_distribution.py` -- 46 tests (marker `packaging`) covering
   the pure layout/parsing/dispatch logic offline, with no PyInstaller run.
 * `dist/KindleBookConverter/` -- the resulting onedir bundle
   (`KindleBookConverter.exe` + `_internal/`).
@@ -182,8 +182,8 @@ isolated `KindleBookConverter.exe`, and checks:
 | `isolated_sysinfo` | frozen identity + version + all 5 dependency versions resolve |
 | `isolated_launch` | `--smoke-check` creates the real window headless |
 | `smoke_novel_basic` | text PDF → EPUB, structurally validated (0w/0e) |
-| `smoke_scanned_book` | graceful OCR unavailability (expected, exit 0) |
-| `smoke_mixed_text_image` | graceful OCR unavailability (expected, exit 0) |
+| `smoke_scanned_book` | OCR conversion succeeds when Tesseract is present; graceful OCR unavailability (expected, exit 0) when Tesseract is absent |
+| `smoke_mixed_text_image` | OCR conversion succeeds when Tesseract is present; graceful OCR unavailability (expected, exit 0) when Tesseract is absent |
 | `smoke_azw3` | EPUB + AZW3 generated via the installed external Calibre |
 
 The developer-oriented non-PyInstaller unit tests are:

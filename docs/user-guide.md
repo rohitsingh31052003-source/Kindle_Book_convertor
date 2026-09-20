@@ -41,7 +41,7 @@ The primary supported way to run the application is the packaged Windows
 executable produced by the build described in
 [Windows packaging](windows-packaging.md). The build produces a folder that is
 distributed as a ZIP archive plus its SHA-256 checksum
-(`KindleBookConverter-Windows-x64-<version>.zip` on a GitHub Release):
+(`KindleBookConverter-Windows-x64-<version>.zip`):
 
 ```text
 KindleBookConverter/
@@ -55,7 +55,7 @@ the executable alone. When you launch the application, a single window titled
 **Kindle Book Converter** opens.
 
 Source users can instead install and launch from Python (see the
-[README](../README.md#development)).
+[README](../README.md#development-setup)).
 
 ## Supported PDFs
 
@@ -89,6 +89,23 @@ zero pages, PDFs that contain neither text nor images, and fixed-layout output.
 The application never fabricates page layout, never performs OCR recognition
 *correction* (spell-checking-style cleanup), and does not emulate or verify
 exact Kindle device rendering.
+
+## Cover handling
+
+A cover image can be supplied for the generated EPUB. You can either:
+
+* **Specify an explicit cover:** choose an image file (JPEG, PNG, GIF, or
+  SVG) in the conversion options. An explicit cover always takes
+  precedence.
+* **Let the application detect a cover automatically:** if no cover is
+  specified, the application examines the first few pages of the PDF and
+  selects a page as the cover only when the evidence is clear (image-dominated
+  early page, confident detection). When the evidence is insufficient or
+  ambiguous, the EPUB is generated without a cover — exactly as before.
+
+Automatic cover detection is conservative: no OCR, image classification,
+machine learning, or file-name heuristics are involved. The supported image
+formats for covers mirror the EPUB image pipeline (JPEG, PNG, GIF, SVG).
 
 ## Using the Windows application
 
@@ -124,7 +141,10 @@ Select PDF → Analyze PDF → Configure output → Start conversion → Results
   a directory.
 * **Cover (optional).** Click the cover button and choose an image file
   (JPEG, PNG, GIF, or SVG). The image becomes the ebook's cover. You can clear
-  the selection at any time. Covers are never guessed automatically.
+  the selection at any time. If no cover is specified, the application may
+  automatically detect a confident cover page from the early pages of the PDF
+  (see [Cover handling](#cover-handling)); an explicit cover always takes
+  precedence over automatic detection.
 * When an input has been analyzed and a valid output directory and format are
   selected, the status changes to **Ready for conversion**.
 

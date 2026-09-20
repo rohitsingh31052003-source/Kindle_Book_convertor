@@ -162,14 +162,10 @@ source installation.
 ### Windows executable
 
 Packaged Windows builds are distributed for this repository.
-The first public release is currently being prepared (see
-[Roadmap](#roadmap)); until it is published, you can either run from source or
-build the package yourself with the documented build recipe in
-[docs/windows-packaging.md](docs/windows-packaging.md).
-
-The release bundle is distributed as a **ZIP archive** (e.g.
+The release bundle is available as a **ZIP archive** (e.g.
 `KindleBookConverter-Windows-x64-0.1.0.zip`) together with its SHA-256
-checksum. Extracting it reproduces the application folder:
+checksum — see [Windows packaging](docs/windows-packaging.md) for the build
+and verification recipe. Extracting it reproduces the application folder:
 
 ```text
 KindleBookConverter/
@@ -550,7 +546,8 @@ authentication is planned as current work.
 
 * [x] Repository + README public readiness (M8.1; this README and the repository prepared for first-time visitors)
 * [x] Windows distribution artifact + workflow (M8.2; a verified, reproducible Windows ZIP distribution with its build/verification/documentation flow — GitHub Release *publication* of the assets remains future)
-* [ ] GitHub Release publication (M8.3; attaching the Windows distribution assets to a public GitHub Release — the first public release, part of M8.2+ overall)
+* [x] User documentation + user guide (M8.3; complete, accurate, release-ready end-user documentation)
+* [ ] GitHub Release publication (attaching the Windows distribution assets to a public GitHub Release — the first public release, part of M8.2+ overall)
 * [ ] Future improvements: conversion-quality refinements, additional PDF compatibility, and user-requested improvements
 * [ ] Future hosted/web version (deferred; not current work — scope is undecided)
 

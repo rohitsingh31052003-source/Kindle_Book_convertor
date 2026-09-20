@@ -137,7 +137,7 @@ The suite is organized by markers so that you can run a single concern:
 venv\Scripts\python.exe -m pytest -m regression     # M6.2 corpus regression (253 tests)
 venv\Scripts\python.exe -m pytest -m quality        # M6.3 conversion quality (148 tests)
 venv\Scripts\python.exe -m pytest -m performance    # M6.4 performance framework (12 tests)
-venv\Scripts\python.exe -m pytest -m packaging      # M6.5 packaging configuration (24 tests)
+venv\Scripts\python.exe -m pytest -m packaging      # M6.5/M8.2 packaging configuration (46 tests)
 venv\Scripts\python.exe -m pytest -m docs           # M6.6 documentation/release checks
 ```
 
