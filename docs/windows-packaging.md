@@ -32,8 +32,11 @@ Everything below was executed on Windows with Python 3.14.2 and PyInstaller
   `build_tools/windows_entry.py`.
 * `build_tools/verify_windows_package.py` -- verifies the built artifact in
   isolation (see "Verification" below).
+* `build_tools/package_distribution.py` -- packages the verified bundle into
+  the reproducible Windows distribution archive (ZIP + SHA-256) and verifies
+  it (see "Distribution archive" below).
 * `build_tools/common.py` -- shared helpers (pyproject version, PE
-  subsystem detection, dev-path scanning).
+  subsystem detection, dev-path scanning, distribution-archive naming).
 * `kindle_converter/ui/smoke.py` -- the headless smoke harness that ships
   *inside* the packaged application.
 * `tests/test_windows_packaging.py` -- 24 tests (marker `packaging`) covering
@@ -189,6 +192,59 @@ The developer-oriented non-PyInstaller unit tests are:
 PYTHONPATH=src venv\Scripts\python.exe -m pytest tests/test_windows_packaging.py -m packaging
 ```
 
+## Distribution archive
+
+The verified bundle (`dist/KindleBookConverter/`) is a *folder*. A GitHub
+Release hosts single files, so the release artifact is a **ZIP archive** of the
+bundle plus a **SHA-256 checksum** file, produced by
+`build_tools/package_distribution.py`:
+
+```bash
+C:\Python314\python.exe build_tools/package_distribution.py
+```
+
+This writes, next to the bundle in `dist/`:
+
+```text
+KindleBookConverter-Windows-x64-0.1.0.zip
+KindleBookConverter-Windows-x64-0.1.0.zip.sha256
+```
+
+The archive holds the bundle under its own root folder, so extracting it
+reproduces exactly the documented layout:
+
+```text
+KindleBookConverter/
+├── KindleBookConverter.exe
+└── _internal/
+```
+
+The archive is **reproducible**: members are stored in sorted order with a
+fixed timestamp and Unix file mode, so two archives produced from the same
+bundle are byte-identical (the same offline-determinism philosophy as the rest
+of the packaging flow). The name derives from the single version source
+(`pyproject.toml`) and the `Windows-x64` platform tag (`build_tools/common.py`),
+so bumping the version renames the artifact automatically.
+
+By default the tool creates the archive and then verifies it
+(`--no-verify` skips the verification, `--check` only verifies an existing
+archive). The verification report is written to
+`build/windows_distribution_verification.json` and checks:
+
+| Check | What it proves |
+| --- | --- |
+| `archive_present` | the archive exists next to the bundle |
+| `archive_integrity` | every member is readable and uncorrupted |
+| `archive_layout` | `KindleBookConverter/KindleBookConverter.exe` + a non-empty `_internal/` are present |
+| `gui_subsystem` | the executable *inside* the archive is a Windows GUI subsystem image (read from the ZIP via the shared PE parser) |
+| `content_parity` | the archive contains exactly the bundle's files, no more, no less |
+| `checksum` | the `.sha256` file matches the archive contents |
+
+The distribution archive is **not** a second bundle verification — it proves
+the *distribution* layer over the already-verified bundle. A release therefore
+orders: **build → verify bundle → package distribution → verify distribution**
+(see the [release checklist](release-checklist.md)).
+
 ## Verification levels
 
 The release process distinguishes three levels of verification, and does
@@ -248,6 +304,18 @@ Before distributing a release artifact, the release checklist
 
 `build_tools/release_check.py --package` runs the M6.5 verifier against the
 existing artifact and reports pass/fail per check.
+
+In addition to the bundle checks above, before distributing a release the
+checklist requires the **distribution archive** gate:
+
+* `dist/KindleBookConverter-Windows-x64-<version>.zip` exists next to the
+  bundle, along with its `.sha256` checksum file;
+* `build_tools/package_distribution.py --check` reports all checks `ok` (no
+  `fail`); `build/windows_distribution_verification.json` has `"passed": true`;
+* the archive name embeds the current `pyproject.toml` version.
+
+The two release assets for a GitHub Release are therefore the ZIP and the
+`.sha256` file together.
 
 ## Troubleshooting common packaging failures
 

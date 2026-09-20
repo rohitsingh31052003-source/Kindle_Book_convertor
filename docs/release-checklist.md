@@ -16,6 +16,7 @@ Tooling summary:
 * Release-readiness validator — `python build_tools/release_check.py`
 * Windows build — `C:\Python314\python.exe build_tools/build_windows.py`
 * Windows package verification — `C:\Python314\python.exe build_tools/verify_windows_package.py`
+* Windows distribution archive — `C:\Python314\python.exe build_tools/package_distribution.py`
 
 All releases start from the current `master` tip. The current version is
 `0.1.0`; bumping the version means editing the **single source**
@@ -41,6 +42,8 @@ Every gate below must pass. Any failure blocks the release.
 | 11 | **Release artifact is inspected** | See [Windows packaging → Expected artifact checks](windows-packaging.md#expected-artifact-checks-before-distribution) | Executable + `_internal` present together, version resource correct, no dev artifacts/paths |
 | 12 | **Version consistency is confirmed** | `pytest -m packaging` and `pytest -m docs` | Package single-sourcing tests and changelog/docs consistency checks pass |
 | 13 | **Release notes are prepared** | `CHANGELOG.md` | A head entry for the released version documents the implemented capabilities accurately (no overstated claims) |
+| 14 | **Distribution archive created** | `C:\Python314\python.exe build_tools/package_distribution.py` | `dist/KindleBookConverter-Windows-x64-<version>.zip` and its `.sha256` file exist next to the bundle; archive name embeds the `pyproject.toml` version |
+| 15 | **Distribution archive verified** | `C:\Python314\python.exe build_tools/package_distribution.py --check` | All checks `ok` (no `fail`); `build/windows_distribution_verification.json` has `"passed": true`; the two assets (ZIP + `.sha256`) are attached to the release together |
 
 ## Optional / environment-dependent gates
 
@@ -51,22 +54,22 @@ passed when it was skipped.
 
 | # | Gate | Command / condition | Exit criterion |
 | --- | --- | --- | --- |
-| 14 | **Native PDF smoke test** | `KindleBookConverter.exe --smoke <corpus>/pdfs/novel_basic.pdf <outdir>` (or via the verifier) | Conversion succeeds; the EPUB validates (0 warnings / 0 errors) |
-| 15 | **Scanned/mixed behavior verified** | Verifier `smoke_scanned_book` / `smoke_mixed_text_image`, or manual `--smoke` on the scanned/mixed fixtures | Without Tesseract: **graceful** OCR unavailability (`expected: true`, exit 0). With Tesseract installed: a real OCR conversion succeeds. Either outcome must be the designed one for the environment, never a crash |
-| 16 | **OCR path exercised with real Tesseract** | Install Tesseract and re-run `verify_windows_package.py` (or `--smoke` on `scanned_book.pdf`/`mixed_text_image.pdf`) | The scanned/mixed smokes succeed as real conversions, not graceful failures |
-| 17 | **Optional Calibre/AZW3 path verified** | `KindleBookConverter.exe --smoke <novel_basic.pdf> <outdir> --azw3`, or verifier `smoke_azw3` | Calibre present: EPUB + AZW3 produced (`smoke_azw3` `ok`). Calibre absent: reported as **skipped**, not success |
-| 18 | **Isolated local verification** | `build_tools/verify_windows_package.py` (already part of gate 9) | Frozen executable runs from `build/verification_work/bundle` with `PYTHONPATH`/`PYTHONHOME` cleared |
-| 19 | **Actual clean-machine verification** | Run the packaged bundle on a separate clean Windows machine/VM with no development checkout | Executable launches; `--sysinfo`, `--smoke-check`, and `--smoke` behave as in gate 9. **Not currently claimed for this repository's own environment** — the M6.5/M6.6 verification is the isolated local procedure (gate 18); if you run a true clean machine, record that it was done |
+| 16 | **Native PDF smoke test** | `KindleBookConverter.exe --smoke <corpus>/pdfs/novel_basic.pdf <outdir>` (or via the verifier) | Conversion succeeds; the EPUB validates (0 warnings / 0 errors) |
+| 17 | **Scanned/mixed behavior verified** | Verifier `smoke_scanned_book` / `smoke_mixed_text_image`, or manual `--smoke` on the scanned/mixed fixtures | Without Tesseract: **graceful** OCR unavailability (`expected: true`, exit 0). With Tesseract installed: a real OCR conversion succeeds. Either outcome must be the designed one for the environment, never a crash |
+| 18 | **OCR path exercised with real Tesseract** | Install Tesseract and re-run `verify_windows_package.py` (or `--smoke` on `scanned_book.pdf`/`mixed_text_image.pdf`) | The scanned/mixed smokes succeed as real conversions, not graceful failures |
+| 19 | **Optional Calibre/AZW3 path verified** | `KindleBookConverter.exe --smoke <novel_basic.pdf> <outdir> --azw3`, or verifier `smoke_azw3` | Calibre present: EPUB + AZW3 produced (`smoke_azw3` `ok`). Calibre absent: reported as **skipped**, not success |
+| 20 | **Isolated local verification** | `build_tools/verify_windows_package.py` (already part of gate 9) | Frozen executable runs from `build/verification_work/bundle` with `PYTHONPATH`/`PYTHONHOME` cleared |
+| 21 | **Actual clean-machine verification** | Run the packaged bundle on a separate clean Windows machine/VM with no development checkout | Executable launches; `--sysinfo`, `--smoke-check`, and `--smoke` behave as in gate 9. **Not currently claimed for this repository's own environment** — the M6.5/M6.6 verification is the isolated local procedure (gate 20); if you run a true clean machine, record that it was done |
 
 ## Notes on wording
 
-* **Required vs optional.** Gates 1–13 must pass on every release. Gates 14–19
+* **Required vs optional.** Gates 1–15 must pass on every release. Gates 16–21
   are exercised where the environment provides the tools; a skipped
   environment-dependent gate is reported honestly (for example "Calibre absent,
   AZW3 path skipped").
 * **No fabricated verification.** This repository does not claim a physical
   clean-machine test. The strongest available verification is the isolated
-  local run of the frozen artifact (gate 18), which is a real execution of the
+  local run of the frozen artifact (gate 20), which is a real execution of the
   packaged executable but on the same machine that built it.
 * **Expensive suites.** The regression/quality/performance suites are run once
   for a release (gates 5–7). The full suite (gate 4) already includes them;
@@ -74,3 +77,6 @@ passed when it was skipped.
 * **Package verifier reuse.** The release tool (`release_check.py --package`)
   reuses `build_tools.verify_windows_package.verify` — there is exactly one
   package-verification implementation (M6.5), not a second one.
+* **Distribution assets.** A GitHub Release attaches the ZIP **and** its
+  `.sha256` checksum file together (gates 14–15). Downloaders verify the
+  archive with `sha256sum -c` against the shipped checksum.

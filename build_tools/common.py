@@ -62,6 +62,33 @@ _TEXT_SUFFIXES = frozenset(
     {".py", ".pth", ".toml", ".cfg", ".ini", ".json", ".txt", ".md", ".xml"}
 )
 
+#: Platform tag embedded in the Windows distribution archive name (M8.2).
+#: The release artifact is produced and verified on 64-bit Windows (the
+#: PyInstaller build runs under ``win-amd64``).
+PLATFORM_TAG = "Windows-x64"
+
+
+def distribution_archive_name(version: str | None = None) -> str:
+    """File name of the Windows distribution archive (M8.2).
+
+    The artifact is ``KindleBookConverter-Windows-x64-<version>.zip``, derived
+    from the bundle/executable base name, :data:`PLATFORM_TAG`, and the single
+    authoritative version source (``pyproject.toml`` when not overridden).
+    """
+    if version is None:
+        version = project_version()
+    return f"{BUNDLE_NAME}-{PLATFORM_TAG}-{version}.zip"
+
+
+def distribution_archive_path(version: str | None = None) -> Path:
+    """Path of the Windows distribution archive next to the bundle in ``dist/``."""
+    return DIST_DIR / distribution_archive_name(version)
+
+
+def distribution_checksum_path(archive: Path) -> Path:
+    """Path of the SHA-256 checksum file written beside ``archive``."""
+    return archive.with_name(archive.name + ".sha256")
+
 
 def load_pyproject() -> dict[str, Any]:
     """Parse ``pyproject.toml`` at the repository root."""
@@ -160,18 +187,16 @@ def version_info_text(version: str) -> str:
     )
 
 
-def pe_subsystem(path: Path) -> int | None:
-    """Return the PE ``Subsystem`` field of ``path``, or ``None`` when it is
-    not a PE image (2 = Windows GUI subsystem, 3 = Windows console).
+def pe_subsystem_bytes(data: bytes) -> int | None:
+    """Return the PE ``Subsystem`` field of ``data``, or ``None`` when ``data``
+    is not a PE image (2 = Windows GUI subsystem, 3 = Windows console).
 
     The parser reads only the minimal header fields needed (``MZ`` magic, the
     ``e_lfanew`` offset, the ``PE\\0\\0`` signature, and the Optional Header
     ``Subsystem`` field), which is layout-stable for both PE32 and PE32+.
+    Operating on raw bytes lets the distribution verifier inspect the
+    executable *inside* a ZIP archive without extracting to disk.
     """
-    try:
-        data = path.read_bytes()
-    except (OSError, ValueError):
-        return None
     if len(data) < 0x40 or data[:2] != b"MZ":
         return None
     e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
@@ -185,6 +210,17 @@ def pe_subsystem(path: Path) -> int | None:
         return None
     # IMAGE_OPTIONAL_HEADER.Subsystem sits at offset 68 in both variants.
     return struct.unpack_from("<H", data, optional_offset + 68)[0]
+
+
+def pe_subsystem(path: Path) -> int | None:
+    """Return the PE ``Subsystem`` field of ``path``, or ``None`` when it is
+    not a PE image. See :func:`pe_subsystem_bytes` for the layout contract.
+    """
+    try:
+        data = path.read_bytes()
+    except (OSError, ValueError):
+        return None
+    return pe_subsystem_bytes(data)
 
 
 def is_gui_executable(path: Path) -> bool:

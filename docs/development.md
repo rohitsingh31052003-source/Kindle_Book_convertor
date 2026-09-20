@@ -82,7 +82,8 @@ src/kindle_converter/
 └── ui/                    # PySide6 desktop UI (optional ui extra), worker,
                            #   platform seam, smoke harness
 
-build_tools/               # Windows packaging + release tooling (M6.5/M6.6)
+build_tools/               # Windows packaging + release + distribution tooling
+                           #   (M6.5/M6.6/M8.2)
 tests/
 ├── fixtures/corpus/       # M6.1 deterministic synthetic PDF corpus
 ├── regression/            # M6.2 deterministic corpus regression harness
@@ -172,6 +173,13 @@ so the build never touches your developer environment:
 ```bash
 C:\Python314\python.exe build_tools/build_windows.py
 C:\Python314\python.exe build_tools/verify_windows_package.py
+```
+
+The M8.2 **distribution** step packages the verified bundle into the
+reproducible release archive (ZIP + SHA-256) and verifies it:
+
+```bash
+C:\Python314\python.exe build_tools/package_distribution.py
 ```
 
 The release-readiness tool can run the package verifier for you:

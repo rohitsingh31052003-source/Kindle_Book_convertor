@@ -39,17 +39,20 @@ as an ebook, so the result is intended to be read as a book, not a page image.
 
 The primary supported way to run the application is the packaged Windows
 executable produced by the build described in
-[Windows packaging](windows-packaging.md). The build produces a folder:
+[Windows packaging](windows-packaging.md). The build produces a folder that is
+distributed as a ZIP archive plus its SHA-256 checksum
+(`KindleBookConverter-Windows-x64-<version>.zip` on a GitHub Release):
 
 ```text
-dist/KindleBookConverter/
+KindleBookConverter/
 ├── KindleBookConverter.exe   ← run this
 └── _internal/                ← runtime files (keep next to the .exe)
 ```
 
-Keep the executable and its `_internal` folder together — the application needs
-its runtime files and does not work from the executable alone. When you launch
-the application, a single window titled **Kindle Book Converter** opens.
+Extract the ZIP wherever you like, then keep the executable and its `_internal`
+folder together — the application needs its runtime files and does not work from
+the executable alone. When you launch the application, a single window titled
+**Kindle Book Converter** opens.
 
 Source users can instead install and launch from Python (see the
 [README](../README.md#development)).

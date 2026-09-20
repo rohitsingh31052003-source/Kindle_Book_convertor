@@ -167,7 +167,9 @@ The first public release is currently being prepared (see
 build the package yourself with the documented build recipe in
 [docs/windows-packaging.md](docs/windows-packaging.md).
 
-The release bundle is a folder:
+The release bundle is distributed as a **ZIP archive** (e.g.
+`KindleBookConverter-Windows-x64-0.1.0.zip`) together with its SHA-256
+checksum. Extracting it reproduces the application folder:
 
 ```text
 KindleBookConverter/
@@ -547,7 +549,8 @@ authentication is planned as current work.
 ### Milestone 8 — Public GitHub Release
 
 * [x] Repository + README public readiness (M8.1; this README and the repository prepared for first-time visitors)
-* [ ] Windows release artifacts (M8.2+; GitHub Release publication of the packaged application — future, not part of M8.1)
+* [x] Windows distribution artifact + workflow (M8.2; a verified, reproducible Windows ZIP distribution with its build/verification/documentation flow — GitHub Release *publication* of the assets remains future)
+* [ ] GitHub Release publication (M8.3; attaching the Windows distribution assets to a public GitHub Release — the first public release, part of M8.2+ overall)
 * [ ] Future improvements: conversion-quality refinements, additional PDF compatibility, and user-requested improvements
 * [ ] Future hosted/web version (deferred; not current work — scope is undecided)
 

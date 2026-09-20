@@ -59,6 +59,12 @@ see **Known limitations** below for what is deliberately not claimed.
 * **Release engineering (M6.6)** — user/developer/release documentation,
   a release checklist, changelog, single-source version validation, and a
   release-readiness validator (`build_tools/release_check.py`).
+* **Windows distribution archive (M8.2)** — a reproducible ZIP distribution of
+  the packaged Windows application with its SHA-256 checksum
+  (`KindleBookConverter-Windows-x64-<version>.zip` + `.sha256`), produced and
+  verified from the M6.5 bundle by `build_tools/package_distribution.py`; the
+  archive embeds the versioned bundle under its own folder and is byte-identical
+  for a given bundle (see [docs/windows-packaging.md](docs/windows-packaging.md)).
 
 ### Known limitations (implemented behavior, not defects fixed in 0.1.0)
 
