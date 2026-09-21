@@ -556,6 +556,7 @@ authentication is planned as current work.
 * [x] User documentation + user guide (M8.3; complete, accurate, release-ready end-user documentation)
 * [x] Repository quality (M8.4; contribution/security documentation, issue and pull-request templates, generated-artifact hygiene)
 * [x] GitHub Release publication (M8.5; `v0.1.0` published to this public GitHub repository with the Windows distribution ZIP and its SHA-256 checksum attached as release assets)
+* [x] Post-release readiness verification (M8.6; verification-only milestone â release immutability, integration/quality/performance/package/docs gates, and repository hygiene re-verified against the published `v0.1.0`; no new commits)
 * [ ] Future improvements: conversion-quality refinements, additional PDF compatibility, and user-requested improvements
 * [ ] Future hosted/web version (deferred; not current work — scope is undecided)
 
